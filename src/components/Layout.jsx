@@ -1,0 +1,30 @@
+import React from 'react'
+import { useLocation } from 'react-router-dom'
+import BottomNav from './BottomNav'
+import GradientBackground from './GradientBackground'
+
+const SECTION_MAP = {
+  '/': 'dashboard',
+  '/goals': 'goals',
+  '/habits': 'habits',
+  '/money': 'money',
+  '/fitness': 'fitness',
+  '/projects': 'projects',
+  '/journal': 'journal',
+  '/school': 'school',
+}
+
+export default function Layout({ children }) {
+  const location = useLocation()
+  const section = SECTION_MAP[location.pathname] || 'dashboard'
+
+  return (
+    <div className="relative min-h-screen bg-black" style={{ paddingBottom: '80px' }}>
+      <GradientBackground section={section} />
+      <div className="relative z-10">
+        {children}
+      </div>
+      <BottomNav />
+    </div>
+  )
+}
