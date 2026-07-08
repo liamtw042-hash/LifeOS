@@ -6,7 +6,7 @@ const NAV_ITEMS = [
   { path: '/goals', label: 'Goals', icon: '🎯', color: '#7C3AED' },
   { path: '/habits', label: 'Habits', icon: '✅', color: '#06B6D4' },
   { path: '/money', label: 'Money', icon: '💰', color: '#10B981' },
-  { path: '/fitness', label: 'Fit', icon: '💪', color: '#F97316' },
+  { path: '/fitness', label: 'Fit', icon: '💪', color: '#7C3AED' },
   { path: '/projects', label: 'Work', icon: '📋', color: '#EC4899' },
   { path: '/journal', label: 'Notes', icon: '📓', color: '#EAB308' },
   { path: '/school', label: 'School', icon: '🎓', color: '#3B82F6' },
