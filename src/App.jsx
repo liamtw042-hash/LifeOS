@@ -1,18 +1,29 @@
-import React, { useEffect, useRef } from 'react'
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import Auth from './pages/Auth'
-import Dashboard from './pages/Dashboard'
-import Fitness from './pages/Fitness'
-import Review from './pages/Review'
-import Journal from './pages/Journal'
-import School from './pages/School'
-import Wellness from './pages/Wellness'
-import Settings from './pages/Settings'
 import LoadingSpinner from './components/LoadingSpinner'
 import { useFirestore } from './hooks/useFirestore'
 import { startScheduler, defaultReminders } from './lib/reminders'
+
+// Code-split the page routes so the initial bundle stays small.
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Fitness = lazy(() => import('./pages/Fitness'))
+const Review = lazy(() => import('./pages/Review'))
+const Journal = lazy(() => import('./pages/Journal'))
+const School = lazy(() => import('./pages/School'))
+const Wellness = lazy(() => import('./pages/Wellness'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+
+function FullScreenLoader() {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black">
+      <LoadingSpinner color="#7C3AED" size={40} />
+    </div>
+  )
+}
 
 // Runs the reminder scheduler while logged in, reading the latest settings doc.
 function useReminderScheduler() {
@@ -32,34 +43,63 @@ function useReminderScheduler() {
   }, [])
 }
 
+function AppRoutes() {
+  return (
+    <Layout>
+      <Suspense fallback={<FullScreenLoader />}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/fitness" element={<Fitness />} />
+          <Route path="/review" element={<Review />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/school" element={<School />} />
+          <Route path="/wellness" element={<Wellness />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </Layout>
+  )
+}
+
+// Decides between first-run onboarding and the app. A user is "brand new"
+// only when they have no fitnessProfile doc AND no settings doc.
+function OnboardingGate() {
+  const { docs: profiles, fetchDocs: fetchProfiles } = useFirestore('fitnessProfile')
+  const { docs: settings, fetchDocs: fetchSettings } = useFirestore('settings')
+  const [ready, setReady] = useState(false)
+  const [completed, setCompleted] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchProfiles(), fetchSettings()])
+      .catch(() => {})
+      .finally(() => { if (alive) setReady(true) })
+    return () => { alive = false }
+  }, [fetchProfiles, fetchSettings])
+
+  if (!ready) return <FullScreenLoader />
+
+  const brandNew = (profiles?.length || 0) === 0 && (settings?.length || 0) === 0
+  if (brandNew && !completed) {
+    return (
+      <Suspense fallback={<FullScreenLoader />}>
+        <Onboarding onDone={() => setCompleted(true)} />
+      </Suspense>
+    )
+  }
+
+  return <AppRoutes />
+}
+
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
   useReminderScheduler()
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black">
-        <LoadingSpinner color="#7C3AED" size={40} />
-      </div>
-    )
-  }
-
+  if (loading) return <FullScreenLoader />
   if (!user) return <Navigate to="/auth" replace />
 
-  return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/fitness" element={<Fitness />} />
-        <Route path="/review" element={<Review />} />
-        <Route path="/journal" element={<Journal />} />
-        <Route path="/school" element={<School />} />
-        <Route path="/wellness" element={<Wellness />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
-  )
+  return <OnboardingGate />
 }
 
 export default function App() {
@@ -77,13 +117,7 @@ export default function App() {
 
 function AuthGate() {
   const { user, loading } = useAuth()
-  if (loading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black">
-        <LoadingSpinner color="#7C3AED" size={40} />
-      </div>
-    )
-  }
+  if (loading) return <FullScreenLoader />
   if (user) return <Navigate to="/" replace />
   return <Auth />
 }

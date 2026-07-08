@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import GlobalSearch from './GlobalSearch'
 
 const COLOR = '#7C3AED'
 
 const ACTIONS = [
+  { key: 'search', icon: '🔍', label: 'Search', action: 'search' },
   { key: 'food', icon: '🍽️', label: 'Log food', to: '/fitness', state: { tab: 'food' } },
   { key: 'train', icon: '💪', label: 'Start workout', to: '/fitness', state: { tab: 'train' } },
   { key: 'journal', icon: '📓', label: 'Journal entry', to: '/journal' },
@@ -13,6 +15,7 @@ const ACTIONS = [
 export default function QuickAdd() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
 
   // Collapse on scroll so the menu never lingers over content.
   useEffect(() => {
@@ -24,6 +27,7 @@ export default function QuickAdd() {
 
   function handleAction(a) {
     setOpen(false)
+    if (a.action === 'search') { setSearchOpen(true); return }
     if (a.state) navigate(a.to, { state: a.state })
     else navigate(a.to)
   }
@@ -33,6 +37,8 @@ export default function QuickAdd() {
 
   return (
     <>
+      <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+
       {/* Scrim — closes menu on outside tap */}
       {open && (
         <div
