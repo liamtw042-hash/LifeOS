@@ -45,6 +45,46 @@ function shiftDate(dateStr, days) {
   return localKey(d)
 }
 
+// Monday-based start of the week containing `d`.
+function startOfWeek(d) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  const dow = (x.getDay() + 6) % 7 // 0 = Mon
+  x.setDate(x.getDate() - dow)
+  return x
+}
+// Completions falling inside the current (Mon–Sun) week.
+function weekCompletions(completions) {
+  const start = startOfWeek(new Date())
+  const set = new Set(completions || [])
+  let c = 0
+  for (let i = 0; i < 7; i++) {
+    const dd = new Date(start)
+    dd.setDate(dd.getDate() + i)
+    if (set.has(localKey(dd))) c++
+  }
+  return c
+}
+// Grid of the last 4 weeks (Mon-first), each row a week, for a streak calendar.
+function last4Weeks(completions) {
+  const set = new Set(completions || [])
+  const todayK = localKey(new Date())
+  const start = startOfWeek(new Date())
+  start.setDate(start.getDate() - 21) // 4 weeks incl. current
+  const weeks = []
+  for (let w = 0; w < 4; w++) {
+    const row = []
+    for (let i = 0; i < 7; i++) {
+      const dd = new Date(start)
+      dd.setDate(dd.getDate() + w * 7 + i)
+      const key = localKey(dd)
+      row.push({ key, day: dd.getDate(), done: set.has(key), isToday: key === todayK, future: key > todayK })
+    }
+    weeks.push(row)
+  }
+  return weeks
+}
+
 function calcStreak(completions) {
   if (!completions || !completions.length) return 0
   let streak = 0
@@ -118,6 +158,7 @@ export default function Dashboard() {
   const { docs: weights, fetchDocs: fetchWeights } = useFirestore('weights')
   const { docs: journal, fetchDocs: fetchJournal } = useFirestore('journal')
   const { docs: foodLog, fetchDocs: fetchFood } = useFirestore('foodLog')
+  const { docs: settingsDocs, fetchDocs: fetchSettings } = useFirestore('settings')
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -128,9 +169,10 @@ export default function Dashboard() {
     fetchWeights()
     fetchJournal()
     fetchFood()
+    fetchSettings()
     const timer = setInterval(() => setTime(new Date()), 60000)
     return () => clearInterval(timer)
-  }, [fetchHabits, fetchGoals, fetchDaily, fetchSessions, fetchWeights, fetchJournal, fetchFood])
+  }, [fetchHabits, fetchGoals, fetchDaily, fetchSessions, fetchWeights, fetchJournal, fetchFood, fetchSettings])
 
   const today = todayStr()
   const tomorrow = shiftDate(today, 1)
@@ -152,7 +194,9 @@ export default function Dashboard() {
   }
 
   const streak = calcOverallStreak()
-  const name = user?.displayName?.split(' ')[0] || 'there'
+  const settingsDoc = (settingsDocs || [])[0] || null
+  const settingsName = String(settingsDoc?.displayName || '').trim()
+  const name = (settingsName || user?.displayName || '').split(' ')[0] || 'there'
 
   // ---- Achievements ----
   const achievements = useMemo(
@@ -226,12 +270,19 @@ export default function Dashboard() {
   }
 
   const [habitModal, setHabitModal] = useState(false)
-  const [habitForm, setHabitForm] = useState({ emoji: '✅', name: '' })
+  const [habitForm, setHabitForm] = useState({ emoji: '✅', name: '', weeklyTarget: '' })
+  const [habitDetail, setHabitDetail] = useState(null) // habit for calendar modal
   async function submitHabit(e) {
     e.preventDefault()
     if (!habitForm.name.trim()) return
-    await addHabit({ ...habitForm, name: habitForm.name.trim(), completions: [] })
-    setHabitForm({ emoji: '✅', name: '' })
+    const wt = parseInt(habitForm.weeklyTarget, 10)
+    await addHabit({
+      emoji: habitForm.emoji,
+      name: habitForm.name.trim(),
+      completions: [],
+      weeklyTarget: Number.isFinite(wt) && wt > 0 ? Math.min(7, wt) : null,
+    })
+    setHabitForm({ emoji: '✅', name: '', weeklyTarget: '' })
     setHabitModal(false)
   }
 
@@ -533,25 +584,49 @@ export default function Dashboard() {
               const completions = habit.completions || []
               const done = completions.includes(today)
               const hStreak = calcStreak(completions)
+              const target = Number(habit.weeklyTarget) || 0
+              const weekDone = weekCompletions(completions)
+              const metTarget = target > 0 && weekDone >= target
               return (
-                <div key={habit.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <button
-                    onClick={() => toggleHabit(habit)}
-                    className="btn-press w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                    style={{
-                      background: done ? CYAN : 'rgba(255,255,255,0.05)',
-                      border: `2px solid ${done ? CYAN : 'rgba(255,255,255,0.15)'}`,
-                      boxShadow: done ? `0 0 12px ${CYAN}60` : 'none',
-                    }}
-                  >
-                    {done && <span className="text-white text-sm animate-checkmark">✓</span>}
-                  </button>
-                  <span className="text-base">{habit.emoji || '✅'}</span>
-                  <span className={`flex-1 text-sm font-bold ${done ? 'text-white/40 line-through' : 'text-white'}`}>
-                    {habit.name}
-                  </span>
-                  <span className="text-sm font-black text-white flex-shrink-0">{hStreak > 0 ? `${hStreak}🔥` : '–'}</span>
-                  <button onClick={() => deleteHabit(habit.id)} className="text-white/15 hover:text-red-400 transition-colors text-sm flex-shrink-0">✕</button>
+                <div key={habit.id} className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => toggleHabit(habit)}
+                      className="btn-press w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                      style={{
+                        background: done ? CYAN : 'rgba(255,255,255,0.05)',
+                        border: `2px solid ${done ? CYAN : 'rgba(255,255,255,0.15)'}`,
+                        boxShadow: done ? `0 0 12px ${CYAN}60` : 'none',
+                      }}
+                    >
+                      {done && <span className="text-white text-sm animate-checkmark">✓</span>}
+                    </button>
+                    <span className="text-base">{habit.emoji || '✅'}</span>
+                    <button
+                      onClick={() => setHabitDetail(habit)}
+                      className="btn-press flex-1 text-left min-w-0"
+                      aria-label={`${habit.name} history`}
+                    >
+                      <span className={`block text-sm font-bold truncate ${done ? 'text-white/40 line-through' : 'text-white'}`}>
+                        {habit.name}
+                      </span>
+                      {target > 0 && (
+                        <span className="text-[10px] font-semibold" style={{ color: metTarget ? '#10B981' : 'rgba(255,255,255,0.4)' }}>
+                          {weekDone}/{target} this week{metTarget ? ' ✓' : ''}
+                        </span>
+                      )}
+                    </button>
+                    <span className="text-sm font-black text-white flex-shrink-0">{hStreak > 0 ? `${hStreak}🔥` : '–'}</span>
+                    <button onClick={() => deleteHabit(habit.id)} className="text-white/15 hover:text-red-400 transition-colors text-sm flex-shrink-0">✕</button>
+                  </div>
+                  {target > 0 && (
+                    <div className="mt-2 ml-11 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (weekDone / target) * 100)}%`, background: metTarget ? '#10B981' : CYAN }}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -659,12 +734,89 @@ export default function Dashboard() {
                 placeholder="e.g. Morning workout" />
             </div>
           </div>
+          <div>
+            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Weekly target (optional)</label>
+            <div className="flex gap-1.5">
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => {
+                const active = String(habitForm.weeklyTarget || '') === String(n) || (n === 0 && !habitForm.weeklyTarget)
+                return (
+                  <button key={n} type="button"
+                    onClick={() => setHabitForm(f => ({ ...f, weeklyTarget: n === 0 ? '' : String(n) }))}
+                    className="btn-press flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+                    style={{
+                      background: active ? `${CYAN}25` : 'rgba(255,255,255,0.04)',
+                      color: active ? CYAN : 'rgba(255,255,255,0.5)',
+                      border: `1px solid ${active ? CYAN + '60' : 'transparent'}`,
+                    }}>
+                    {n === 0 ? '—' : n}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-white/30 mt-1.5">Days per week you aim to complete this habit.</p>
+          </div>
           <button type="submit"
             className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
             style={{ background: `linear-gradient(135deg, ${CYAN}, #0891B2)`, boxShadow: `0 0 30px ${CYAN}50` }}>
             Add Habit
           </button>
         </form>
+      </Modal>
+
+      {/* ---- Habit streak calendar modal ---- */}
+      <Modal isOpen={!!habitDetail} onClose={() => setHabitDetail(null)} title={habitDetail ? `${habitDetail.emoji || '✅'} ${habitDetail.name}` : 'Habit'} accentColor={CYAN}>
+        {habitDetail && (() => {
+          const completions = habitDetail.completions || []
+          const weeks = last4Weeks(completions)
+          const hStreak = calcStreak(completions)
+          const target = Number(habitDetail.weeklyTarget) || 0
+          const weekDone = weekCompletions(completions)
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                  <div className="text-lg font-black text-white">{hStreak}🔥</div>
+                  <div className="text-[9px] text-white/40 uppercase tracking-wider mt-0.5">Streak</div>
+                </div>
+                <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                  <div className="text-lg font-black text-white">{completions.length}</div>
+                  <div className="text-[9px] text-white/40 uppercase tracking-wider mt-0.5">Total</div>
+                </div>
+                <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                  <div className="text-lg font-black text-white">{target > 0 ? `${weekDone}/${target}` : weekDone}</div>
+                  <div className="text-[9px] text-white/40 uppercase tracking-wider mt-0.5">This week</div>
+                </div>
+              </div>
+              <div>
+                <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                    <div key={i} className="text-center text-[9px] font-bold text-white/30">{d}</div>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {weeks.map((row, wi) => (
+                    <div key={wi} className="grid grid-cols-7 gap-1.5">
+                      {row.map((c) => (
+                        <div key={c.key}
+                          className="aspect-square rounded-lg flex items-center justify-center text-[10px] font-bold transition-all"
+                          style={{
+                            background: c.done ? CYAN : 'rgba(255,255,255,0.04)',
+                            color: c.done ? '#fff' : c.future ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)',
+                            border: c.isToday ? `1.5px solid ${c.done ? '#fff' : CYAN}` : '1px solid transparent',
+                            opacity: c.future ? 0.4 : 1,
+                            boxShadow: c.done ? `0 0 8px ${CYAN}60` : 'none',
+                          }}>
+                          {c.day}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-white/30 mt-2 text-center">Last 4 weeks · completed days highlighted</p>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* ---- Add Goal modal ---- */}
