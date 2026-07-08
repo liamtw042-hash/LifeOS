@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MacroRings from '../components/fitness/MacroRings'
 import BarcodeScanner from '../components/fitness/BarcodeScanner'
+import TrainTab from '../components/fitness/TrainTab'
 import { FOODS } from '../data/foods'
 import { parseInlineMacros, parseFoodText } from '../lib/foodParser'
 import { calcTargets, ACTIVITY_LEVELS } from '../lib/nutrition'
@@ -13,17 +14,6 @@ const COLOR = '#7C3AED'
 const DEFAULT_TARGETS = { calories: 2200, protein: 150, carbs: 220, fat: 70 }
 const WATER_GOAL_ML = 2000
 const CUP_ML = 250
-
-const WORKOUT_TYPES = [
-  { label: 'Run', icon: '🏃' },
-  { label: 'Lift', icon: '🏋️' },
-  { label: 'Yoga', icon: '🧘' },
-  { label: 'Swim', icon: '🏊' },
-  { label: 'Bike', icon: '🚴' },
-  { label: 'HIIT', icon: '⚡' },
-  { label: 'Walk', icon: '🚶' },
-  { label: 'Other', icon: '💪' },
-]
 
 const ACTIVITY_LABELS = {
   sedentary: 'Sedentary',
@@ -768,113 +758,6 @@ function TargetCalculatorModal({ isOpen, onClose, profile, onSave }) {
         </button>
       </form>
     </Modal>
-  )
-}
-
-/* ============================= TRAIN TAB ============================= */
-
-function TrainTab() {
-  const { docs: workouts, loading, fetchDocs, addDocument, deleteDocument } = useFirestore('workouts')
-  const [showModal, setShowModal] = useState(false)
-  const [wForm, setWForm] = useState({ type: 'Run', duration: '', date: todayStr(), notes: '' })
-
-  useEffect(() => { fetchDocs() }, [fetchDocs])
-
-  async function handleAdd(e) {
-    e.preventDefault()
-    if (!wForm.duration) return
-    await addDocument({ ...wForm, duration: Number(wForm.duration) })
-    setWForm({ type: 'Run', duration: '', date: todayStr(), notes: '' })
-    setShowModal(false)
-  }
-
-  const sorted = [...workouts].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-  const typeIcon = (t) => WORKOUT_TYPES.find((x) => x.label === t)?.icon || '💪'
-  const totalMins = workouts.reduce((s, w) => s + (Number(w.duration) || 0), 0)
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-white/40 text-sm">{workouts.length} workouts · {totalMins}min total</p>
-        <button onClick={() => setShowModal(true)}
-          className="btn-press w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xl"
-          style={{ background: COLOR, boxShadow: `0 0 20px ${COLOR}60` }}>+</button>
-      </div>
-
-      {loading && <div className="flex justify-center py-8"><LoadingSpinner color={COLOR} size={32} /></div>}
-
-      {sorted.map((w) => (
-        <Card key={w.id} accentColor={COLOR} className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl flex-shrink-0"
-              style={{ background: `${COLOR}18` }}>
-              {typeIcon(w.type)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white text-sm">{w.type}</span>
-                <span className="font-black text-sm" style={{ color: COLOR }}>{w.duration}min</span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs text-white/30">{w.date}</span>
-                {w.notes && <span className="text-xs text-white/40 truncate max-w-[120px]">· {w.notes}</span>}
-              </div>
-            </div>
-            <button onClick={() => deleteDocument(w.id)} className="text-white/15 hover:text-red-400 transition-colors ml-1 flex-shrink-0">✕</button>
-          </div>
-        </Card>
-      ))}
-      {!loading && workouts.length === 0 && (
-        <div className="text-center py-16 text-white/30">
-          <div className="text-5xl mb-3">💪</div>
-          <p className="font-semibold">Log your first workout</p>
-        </div>
-      )}
-
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Log Workout" accentColor={COLOR}>
-        <form onSubmit={handleAdd} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-2 uppercase tracking-widest">Type</label>
-            <div className="grid grid-cols-4 gap-2">
-              {WORKOUT_TYPES.map((t) => (
-                <button key={t.label} type="button"
-                  onClick={() => setWForm((f) => ({ ...f, type: t.label }))}
-                  className="btn-press flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-semibold transition-all"
-                  style={{
-                    background: wForm.type === t.label ? `${COLOR}25` : 'rgba(255,255,255,0.04)',
-                    color: wForm.type === t.label ? COLOR : 'rgba(255,255,255,0.45)',
-                    border: `1px solid ${wForm.type === t.label ? COLOR + '60' : 'transparent'}`,
-                  }}>
-                  <span className="text-base">{t.icon}</span>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Duration (minutes)</label>
-            <input type="number" min="1" value={wForm.duration} onChange={(e) => setWForm((f) => ({ ...f, duration: e.target.value }))} required
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED] transition-colors"
-              placeholder="45" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Date</label>
-            <input type="date" value={wForm.date} onChange={(e) => setWForm((f) => ({ ...f, date: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-[#7C3AED] transition-colors" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Notes</label>
-            <input type="text" value={wForm.notes} onChange={(e) => setWForm((f) => ({ ...f, notes: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED] transition-colors"
-              placeholder="How did it feel?" />
-          </div>
-          <button type="submit" className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
-            style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 30px ${COLOR}50` }}>
-            Log Workout
-          </button>
-        </form>
-      </Modal>
-    </div>
   )
 }
 
