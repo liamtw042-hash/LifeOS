@@ -4,6 +4,9 @@
 // Macros are rounded to sensible integers and reflect accurate-ish real-world values.
 
 export const FOODS = [
+  // ---- User staples ----
+  { name: 'My protein shake', cal: 850, p: 54, c: 90, f: 28, serving: '1 shake', aliases: ['protein shake', 'shake', 'my shake'] },
+
   // ---- McDonald's (AU) ----
   { name: "Big Mac", cal: 563, p: 26, c: 46, f: 30, serving: "1 burger", aliases: ["bigmac", "big mac burger"] },
   { name: "Double Quarter Pounder", cal: 762, p: 47, c: 43, f: 45, serving: "1 burger", aliases: ["double quarter pounder with cheese"] },
@@ -71,7 +74,7 @@ export const FOODS = [
   { name: "Egg", cal: 78, p: 6, c: 1, f: 5, serving: "1 large", aliases: ["eggs", "boiled egg", "fried egg"] },
   { name: "Tim Tam", cal: 95, p: 1, c: 12, f: 5, serving: "1 biscuit", aliases: ["tim tams", "timtam"] },
   { name: "Chocolate Milk", cal: 190, p: 8, c: 30, f: 5, serving: "1 cup", aliases: ["choc milk", "flavoured milk"] },
-  { name: "Protein Shake", cal: 120, p: 25, c: 3, f: 2, serving: "1 scoop whey", aliases: ["whey", "whey scoop", "whey protein", "protein powder", "protein"] },
+  { name: "Protein shake (whey & water)", cal: 125, p: 25, c: 3, f: 2, serving: "1 scoop whey", aliases: ["whey", "whey scoop", "whey protein", "protein powder"] },
   { name: "Protein Bar", cal: 220, p: 20, c: 22, f: 7, serving: "1 bar", aliases: ["proteinbar"] },
   { name: "Avocado", cal: 240, p: 3, c: 12, f: 22, serving: "1 whole", aliases: ["avo", "avocados"] },
   { name: "Tin of Tuna", cal: 130, p: 29, c: 0, f: 1, serving: "95g tin", aliases: ["tuna", "canned tuna", "tuna tin"] },

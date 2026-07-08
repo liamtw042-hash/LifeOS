@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 const COLOR = '#7C3AED'
 const SCANNER_ID = 'barcode-scanner-region'
@@ -32,18 +32,40 @@ function mapProduct(product) {
 export default function BarcodeScanner({ onFound, onClose }) {
   const scannerRef = useRef(null)
   const activeRef = useRef(false)
-  const [status, setStatus] = useState('starting') // starting | scanning | error | looking-up
+  const mountedRef = useRef(true)
+  const [status, setStatus] = useState('initializing') // initializing | scanning | error | looking-up
   const [message, setMessage] = useState('')
   const [manual, setManual] = useState('')
+  const [attempt, setAttempt] = useState(0)
 
-  async function lookup(barcode) {
+  const stop = useCallback(async () => {
+    activeRef.current = false
+    const scanner = scannerRef.current
+    scannerRef.current = null
+    if (!scanner) return
+    try {
+      await scanner.stop()
+    } catch (e) {
+      /* already stopped / never started */
+    }
+    try {
+      await scanner.clear()
+    } catch (e) {
+      /* ignore */
+    }
+  }, [])
+
+  const lookup = useCallback(async (barcode) => {
     const code = String(barcode || '').trim()
     if (!code) return
+    await stop()
+    if (!mountedRef.current) return
     setStatus('looking-up')
     setMessage(`Looking up ${code}…`)
     try {
       const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`)
       const data = await res.json()
+      if (!mountedRef.current) return
       if (data && data.status === 1 && data.product) {
         const food = mapProduct(data.product)
         if (typeof onFound === 'function') onFound(food)
@@ -52,16 +74,20 @@ export default function BarcodeScanner({ onFound, onClose }) {
         setMessage(`No product found for ${code}. Try manual entry or add a custom food.`)
       }
     } catch (e) {
+      if (!mountedRef.current) return
       setStatus('error')
       setMessage('Could not reach the food database. Check your connection or add manually.')
     }
-  }
+  }, [onFound, stop])
 
   useEffect(() => {
+    mountedRef.current = true
     let cancelled = false
 
     async function start() {
       if (typeof window === 'undefined') return
+      setStatus('initializing')
+      setMessage('')
       try {
         const mod = await import('html5-qrcode')
         if (cancelled) return
@@ -83,26 +109,32 @@ export default function BarcodeScanner({ onFound, onClose }) {
         })
         scannerRef.current = scanner
         activeRef.current = true
+        // qrbox sized to fit inside the container (square, padded).
+        const qrboxFn = (vw, vh) => {
+          const edge = Math.max(120, Math.floor(Math.min(vw, vh) * 0.7))
+          return { width: edge, height: Math.floor(edge * 0.62) }
+        }
         await scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 150 } },
+          { fps: 10, qrbox: qrboxFn, aspectRatio: 1.0 },
           (decodedText) => {
             if (!activeRef.current) return
             activeRef.current = false
-            stop().finally(() => lookup(decodedText))
+            lookup(decodedText)
           },
           () => {} // per-frame decode failure — ignore
         )
-        if (!cancelled) {
-          setStatus('scanning')
-          setMessage('')
+        if (cancelled) {
+          // component closed during async start — release camera immediately
+          stop()
+          return
         }
+        setStatus('scanning')
+        setMessage('')
       } catch (e) {
         if (cancelled) return
         setStatus('error')
-        setMessage(
-          'Camera unavailable or permission denied. Enter the barcode number below instead.'
-        )
+        setMessage('Camera unavailable or permission denied. Retry, or enter the barcode number below.')
       }
     }
 
@@ -110,52 +142,74 @@ export default function BarcodeScanner({ onFound, onClose }) {
 
     return () => {
       cancelled = true
+      mountedRef.current = false
       stop()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [attempt])
 
-  async function stop() {
-    activeRef.current = false
-    const scanner = scannerRef.current
-    scannerRef.current = null
-    if (!scanner) return
-    try {
-      if (typeof scanner.getState === 'function') {
-        // 2 === SCANNING in html5-qrcode
-      }
-      await scanner.stop()
-    } catch (e) {
-      /* already stopped */
-    }
-    try {
-      await scanner.clear()
-    } catch (e) {
-      /* ignore */
-    }
+  function handleClose() {
+    stop().finally(() => {
+      if (typeof onClose === 'function') onClose()
+    })
   }
 
   return (
     <div className="space-y-4">
+      {/* Header with close */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-white">Scan a barcode</span>
+        {typeof onClose === 'function' && (
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close scanner"
+            className="btn-press w-8 h-8 rounded-full flex items-center justify-center text-white/70 bg-white/5 border border-white/10"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Camera container: fixed, responsive, nothing overflows */}
       <div
-        id={SCANNER_ID}
-        className="w-full rounded-2xl overflow-hidden bg-black/50 border border-white/10"
-        style={{ minHeight: status === 'error' ? 0 : 220 }}
-      />
+        className="relative mx-auto w-full rounded-2xl overflow-hidden bg-black/60 border border-white/10"
+        style={{ height: 'min(70vh, 400px)' }}
+      >
+        <div id={SCANNER_ID} className="absolute inset-0 w-full h-full" />
 
-      {status === 'starting' && (
-        <p className="text-sm text-white/50 text-center">Starting camera…</p>
-      )}
+        {(status === 'initializing' || status === 'looking-up') && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6">
+            <div
+              className="w-8 h-8 rounded-full border-2 border-white/20 animate-spin"
+              style={{ borderTopColor: COLOR }}
+            />
+            <p className="text-sm text-white/60">
+              {status === 'looking-up' ? message : 'Starting camera…'}
+            </p>
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-6">
+            <p className="text-sm" style={{ color: '#F59E0B' }}>{message}</p>
+            <button
+              type="button"
+              onClick={() => setAttempt((a) => a + 1)}
+              className="btn-press px-5 py-2 rounded-xl font-bold text-white text-sm"
+              style={{ background: COLOR, boxShadow: `0 0 20px ${COLOR}50` }}
+            >
+              Retry camera
+            </button>
+          </div>
+        )}
+      </div>
+
       {status === 'scanning' && (
-        <p className="text-sm text-white/50 text-center">Point the camera at a barcode.</p>
-      )}
-      {status === 'looking-up' && (
-        <p className="text-sm text-white/60 text-center">{message}</p>
-      )}
-      {status === 'error' && message && (
-        <p className="text-sm text-center" style={{ color: '#F59E0B' }}>{message}</p>
+        <p className="text-xs text-white/50 text-center">Point the rear camera at a barcode.</p>
       )}
 
+      {/* Manual fallback — always available */}
       <div>
         <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">
           Enter barcode manually
@@ -166,6 +220,7 @@ export default function BarcodeScanner({ onFound, onClose }) {
             inputMode="numeric"
             value={manual}
             onChange={(e) => setManual(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), lookup(manual))}
             placeholder="e.g. 9310072011691"
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm"
             style={{ outline: 'none' }}
@@ -184,7 +239,7 @@ export default function BarcodeScanner({ onFound, onClose }) {
       {typeof onClose === 'function' && (
         <button
           type="button"
-          onClick={() => { stop().finally(onClose) }}
+          onClick={handleClose}
           className="btn-press w-full py-2.5 rounded-xl font-semibold text-white/60 text-sm bg-white/5 border border-white/10"
         >
           Cancel
