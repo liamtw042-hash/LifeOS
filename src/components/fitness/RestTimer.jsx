@@ -14,27 +14,23 @@ export default function RestTimer({ seconds = 60, onDone, onClose }) {
   const [total, setTotal] = useState(Math.max(5, Number(seconds) || 60))
   const [remaining, setRemaining] = useState(Math.max(5, Number(seconds) || 60))
   const [flash, setFlash] = useState(false)
+  const [running, setRunning] = useState(true)
   const doneRef = useRef(false)
-  const intervalRef = useRef(null)
 
-  // Countdown loop
+  // Countdown loop — driven by `running` so it can be restarted after hitting 0.
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) return 0
-        return r - 1
-      })
+    if (!running) return
+    const id = setInterval(() => {
+      setRemaining((r) => (r <= 1 ? 0 : r - 1))
     }, 1000)
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [])
+    return () => clearInterval(id)
+  }, [running])
 
   // Fire completion once when we hit zero
   useEffect(() => {
     if (remaining <= 0 && !doneRef.current) {
       doneRef.current = true
-      if (intervalRef.current) clearInterval(intervalRef.current)
+      setRunning(false)
       try {
         if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
           navigator.vibrate([200, 100, 200])
@@ -50,9 +46,15 @@ export default function RestTimer({ seconds = 60, onDone, onClose }) {
   }, [remaining, onDone])
 
   function adjust(delta) {
-    doneRef.current = false
-    setRemaining((r) => Math.max(1, r + delta))
-    setTotal((t) => Math.max(1, t + Math.max(0, delta)))
+    setRemaining((r) => {
+      const next = Math.max(0, r + delta)
+      if (next > 0) {
+        doneRef.current = false
+        setRunning(true)
+      }
+      return next
+    })
+    if (delta > 0) setTotal((t) => t + delta)
   }
 
   const size = 180

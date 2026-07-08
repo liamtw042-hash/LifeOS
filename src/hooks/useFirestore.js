@@ -53,9 +53,10 @@ export function useFirestore(collection) {
       await fs.updateDoc(collection, docId, data, token)
     } catch (e) {
       setError(e.message)
-      // Revert on error - re-fetch
+      // Revert on error - re-fetch from server to resync
+      try { fetchDocs() } catch (_) { /* ignore */ }
     }
-  }, [collection, getIdToken])
+  }, [collection, getIdToken, fetchDocs])
 
   const deleteDocument = useCallback(async (docId) => {
     // Optimistic update

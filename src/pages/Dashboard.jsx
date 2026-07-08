@@ -31,11 +31,17 @@ function formatDate() {
   return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function localKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function shiftDate(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00')
   d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return localKey(d)
 }
 
 function calcStreak(completions) {
@@ -43,7 +49,7 @@ function calcStreak(completions) {
   let streak = 0
   const d = new Date()
   while (true) {
-    const key = d.toISOString().slice(0, 10)
+    const key = localKey(d)
     if (!completions.includes(key)) break
     streak++
     d.setDate(d.getDate() - 1)
@@ -127,7 +133,7 @@ export default function Dashboard() {
     let streak = 0
     const d = new Date()
     while (true) {
-      const key = d.toISOString().slice(0, 10)
+      const key = localKey(d)
       const anyDone = habits.some(h => (h.completions || []).includes(key))
       if (!anyDone) break
       streak++
@@ -369,6 +375,7 @@ export default function Dashboard() {
       {/* ---- Long-term goals ---- */}
       <CollapsibleSection
         storageKey="dash.section.goals"
+        defaultOpen
         accentColor={GOAL_COLOR}
         icon="🏆"
         title="Goals"
@@ -500,6 +507,7 @@ export default function Dashboard() {
       {/* ---- Plan tomorrow ---- */}
       <CollapsibleSection
         storageKey="dash.section.planTomorrow"
+        defaultOpen
         accentColor="#EAB308"
         icon="🌙"
         title="Plan Tomorrow"

@@ -1,5 +1,5 @@
-/* LifeOS service worker — minimal cache-first app shell. */
-const CACHE = 'lifeos-v1'
+/* LifeOS service worker — network-first for HTML, cache-first for hashed assets. */
+const CACHE = 'lifeos-v2'
 const SHELL = ['/', '/index.html', '/manifest.json']
 
 self.addEventListener('install', (event) => {
@@ -18,12 +18,38 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
+function isHtmlRequest(request) {
+  if (request.mode === 'navigate') return true
+  const accept = request.headers.get('accept') || ''
+  return accept.includes('text/html')
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   // Only handle same-origin GET; everything else passes through untouched.
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) {
     return
   }
+
+  // Network-first for navigations / HTML so a redeploy never serves a stale shell.
+  if (isHtmlRequest(request)) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            const clone = response.clone()
+            caches.open(CACHE).then((cache) => cache.put(request, clone)).catch(() => {})
+          }
+          return response
+        })
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match('/index.html'))
+        )
+    )
+    return
+  }
+
+  // Cache-first for hashed static assets.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached

@@ -51,7 +51,7 @@ export function suggestNextWeight(lastWeight, lastReps, repHigh, type = 'compoun
 // Is this (weight, reps) a personal record for `name` vs everything in history?
 // history = array of workoutSessions docs. PR if the estimated 1RM beats all
 // prior sets for that exercise (also treats first-ever set as a PR).
-export function isPR(name, weight, reps, history) {
+export function isPR(name, weight, reps, history, requirePrior = false) {
   const w = Number(weight) || 0
   const r = Number(reps) || 0
   if (w <= 0 || r <= 0) return false
@@ -70,7 +70,7 @@ export function isPR(name, weight, reps, history) {
       }
     }
   }
-  if (!seen) return true
+  if (!seen) return requirePrior ? false : true
   return target > best
 }
 

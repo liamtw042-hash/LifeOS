@@ -26,7 +26,10 @@ import {
 
 const COLOR = '#7C3AED'
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // Pick the reference set from a past session (the heaviest by est 1RM).
 function bestSet(sets) {
@@ -163,7 +166,31 @@ export default function TrainTab() {
       const next = (ex.optIndex + 1) % opts.length
       const nextName = opts[next]
       const nextLast = lastSessionSets(nextName, sessionsRef.current)
-      return { ...ex, optIndex: next, name: nextName, lastSets: nextLast }
+      const ref = bestSet(nextLast)
+      const suggested = ref
+        ? suggestNextWeight(ref.weight, ref.reps, ex.base.repRange?.[1], ex.base.type)
+        : 0
+      const isOriginal = next === 0
+      // Alternatives target the same muscle group, so keep muscle/type/repRange
+      // from the base. Replace the base-specific setup tip with a neutral note
+      // (the original cue would be wrong for the alternative).
+      const tip = isOriginal
+        ? ex.base.tip
+        : `Alternative for ${ex.base.name} — set up the cable to target ${ex.base.muscle}.`
+      return {
+        ...ex,
+        optIndex: next,
+        name: nextName,
+        muscle: ex.base.muscle,
+        type: ex.base.type,
+        repRange: ex.base.repRange,
+        tip,
+        lastSets: nextLast,
+        sets: ex.sets.map((s) => ({
+          ...s,
+          weight: suggested ? String(suggested) : s.weight,
+        })),
+      }
     })
   }
 
@@ -560,7 +587,7 @@ function ExerciseCard({
         </div>
         {ex.sets.map((s, setIdx) => {
           const pr =
-            s.done && isPR(ex.name, Number(s.weight) || 0, Number(s.reps) || 0, history)
+            s.done && isPR(ex.name, Number(s.weight) || 0, Number(s.reps) || 0, history, true)
           return (
             <div key={setIdx} className="relative flex items-center gap-2">
               <span className="w-6 text-center text-sm font-bold text-white/50">{setIdx + 1}</span>

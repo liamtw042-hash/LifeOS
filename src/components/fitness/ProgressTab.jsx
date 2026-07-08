@@ -8,7 +8,10 @@ import { generateCoachInsights } from '../../lib/coach'
 const COLOR = '#7C3AED'
 const TONE = { good: '#10B981', warn: '#F97316', info: '#7C3AED' }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function daysAgo(dateStr, today) {
   const a = new Date(String(dateStr) + 'T00:00:00')
