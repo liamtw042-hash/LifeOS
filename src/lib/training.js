@@ -193,3 +193,100 @@ export function lastSessionSets(name, history) {
   const hist = exerciseHistory(name, history)
   return hist.length ? hist[0].sets : null
 }
+
+// The single set with the highest estimated 1RM (warmups excluded).
+export function bestSet(sets) {
+  let best = null
+  for (const s of sets || []) {
+    if (s && s.warmup) continue
+    if (!best || epley1RM(s.weight, s.reps) > epley1RM(best.weight, best.reps)) best = s
+  }
+  return best
+}
+
+// Chronological feed of personal records logged across sessions.
+// Each session stores `prs` as an array of exercise names; we pair each name
+// with the top set for that exercise in that session. Newest first.
+export function prTimeline(history) {
+  const out = []
+  for (const session of history || []) {
+    const names = Array.isArray(session?.prs) ? session.prs : []
+    if (!names.length) continue
+    for (const name of names) {
+      const ex = (session.exercises || []).find((e) => e && e.name === name)
+      const ref = ex ? bestSet(ex.sets) : null
+      const weight = ref ? Number(ref.weight) || 0 : 0
+      const reps = ref ? Number(ref.reps) || 0 : 0
+      out.push({
+        name: name || 'Exercise',
+        muscle: ex?.muscle || '',
+        date: session.date || '',
+        day: session.day || '',
+        weight,
+        reps,
+        est1RM: epley1RM(weight, reps),
+      })
+    }
+  }
+  return out.sort((a, b) => String(b.date).localeCompare(String(a.date)))
+}
+
+// Linear-regression projection of bodyweight toward a goal.
+// weights: [{ date:'YYYY-MM-DD', value:<kg> }]; goalKg in kg; windowDays lookback.
+// today defaults to now. All maths in kg — callers format for display.
+// Returns { ok, current, slopePerDay, remaining, direction, status, etaDate, points }.
+//   status: 'insufficient' | 'reached' | 'flat' | 'away' | 'projecting'
+export function weightProjection(weights, goalKg, windowDays = 30, today = new Date()) {
+  const goal = Number(goalKg)
+  const base = today instanceof Date ? new Date(today) : new Date(today)
+  base.setHours(0, 0, 0, 0)
+  const msDay = 86400000
+  const clean = (Array.isArray(weights) ? weights : [])
+    .map((w) => {
+      const d = new Date(String(w?.date) + 'T00:00:00')
+      return { t: d.getTime(), v: Number(w?.value) || 0, date: w?.date }
+    })
+    .filter((w) => Number.isFinite(w.t) && w.v > 0)
+    .sort((a, b) => a.t - b.t)
+  const cutoff = base.getTime() - windowDays * msDay
+  const pts = clean.filter((w) => w.t >= cutoff)
+  const current = clean.length ? clean[clean.length - 1].v : null
+
+  if (!Number.isFinite(goal) || goal <= 0 || pts.length < 2) {
+    return { ok: false, current, slopePerDay: null, remaining: null, direction: null, status: 'insufficient', etaDate: null, points: pts.length }
+  }
+
+  // Regress value against days-since-first-point.
+  const x0 = pts[0].t
+  const xs = pts.map((p) => (p.t - x0) / msDay)
+  const ys = pts.map((p) => p.v)
+  const n = xs.length
+  const mx = xs.reduce((a, b) => a + b, 0) / n
+  const my = ys.reduce((a, b) => a + b, 0) / n
+  let num = 0, den = 0
+  for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2 }
+  const slope = den === 0 ? 0 : num / den // kg per day
+  const intercept = my - slope * mx
+
+  const cur = current
+  const remaining = cur - goal // >0 means need to lose, <0 means need to gain
+  const direction = slope < 0 ? 'down' : slope > 0 ? 'up' : 'flat'
+
+  if (Math.abs(remaining) < 0.1) {
+    return { ok: true, current: cur, slopePerDay: slope, remaining, direction, status: 'reached', etaDate: null, points: n }
+  }
+  if (Math.abs(slope) < 0.005) { // < ~35g/week — effectively flat
+    return { ok: true, current: cur, slopePerDay: slope, remaining, direction: 'flat', status: 'flat', etaDate: null, points: n }
+  }
+  const needToLose = remaining > 0
+  const movingToward = needToLose ? slope < 0 : slope > 0
+  if (!movingToward) {
+    return { ok: true, current: cur, slopePerDay: slope, remaining, direction, status: 'away', etaDate: null, points: n }
+  }
+  // Solve regression line for goal: goal = intercept + slope * x  → x days from first point.
+  const xGoal = (goal - intercept) / slope
+  const etaMs = x0 + xGoal * msDay
+  let etaDate = new Date(etaMs)
+  if (etaDate.getTime() < base.getTime()) etaDate = base // never project into the past
+  return { ok: true, current: cur, slopePerDay: slope, remaining, direction, status: 'projecting', etaDate, points: n }
+}
