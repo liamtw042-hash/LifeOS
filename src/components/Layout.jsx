@@ -2,6 +2,7 @@ import React from 'react'
 import { useLocation } from 'react-router-dom'
 import BottomNav from './BottomNav'
 import GradientBackground from './GradientBackground'
+import QuickAdd from './QuickAdd'
 
 const SECTION_MAP = {
   '/': 'dashboard',
@@ -20,6 +21,7 @@ export default function Layout({ children }) {
       <div className="relative z-10">
         {children}
       </div>
+      <QuickAdd />
       <BottomNav />
     </div>
   )
