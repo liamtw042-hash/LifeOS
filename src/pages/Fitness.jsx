@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useFirestore } from '../hooks/useFirestore'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
@@ -56,7 +57,17 @@ function sumTotals(items) {
 }
 
 export default function Fitness() {
-  const [tab, setTab] = useState('food')
+  const location = useLocation()
+  const initialTab = ['food', 'train', 'progress'].includes(location.state?.tab)
+    ? location.state.tab
+    : 'food'
+  const [tab, setTab] = useState(initialTab)
+
+  // React to nav state changes when already mounted on /fitness.
+  useEffect(() => {
+    const t = location.state?.tab
+    if (['food', 'train', 'progress'].includes(t)) setTab(t)
+  }, [location.state])
 
   return (
     <div className="page-enter min-h-screen p-4 pt-10 pb-24">

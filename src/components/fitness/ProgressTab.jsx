@@ -9,6 +9,13 @@ import { BarChart, LineChart } from '../charts/Charts'
 const COLOR = '#7C3AED'
 const TONE = { good: '#10B981', warn: '#F97316', info: '#7C3AED' }
 const DEFAULT_TARGETS = { calories: 2200, protein: 150 }
+const MEAS_METRICS = [
+  { key: 'waist', label: 'Waist', icon: '📏' },
+  { key: 'chest', label: 'Chest', icon: '🫁' },
+  { key: 'arms', label: 'Arms', icon: '💪' },
+  { key: 'hips', label: 'Hips', icon: '🧍' },
+  { key: 'thighs', label: 'Thighs', icon: '🦵' },
+]
 
 function localKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -86,6 +93,10 @@ export default function ProgressTab() {
     docs: photos, loading: lPhotos, fetchDocs: fetchPhotos,
     addDocument: addPhoto, deleteDocument: deletePhoto,
   } = useFirestore('progressPhotos')
+  const {
+    docs: measurements, loading: lMeas, fetchDocs: fetchMeas,
+    addDocument: addMeas, deleteDocument: deleteMeas,
+  } = useFirestore('measurements')
 
   const [showWtModal, setShowWtModal] = useState(false)
   const [wtForm, setWtForm] = useState({ value: '', date: todayStr() })
@@ -94,12 +105,14 @@ export default function ProgressTab() {
   const [picked, setPicked] = useState([]) // photo ids
   const [viewPhoto, setViewPhoto] = useState(null)
   const [nutRange, setNutRange] = useState(7)
+  const [showMeasModal, setShowMeasModal] = useState(false)
+  const [measForm, setMeasForm] = useState({ date: todayStr(), waist: '', chest: '', arms: '', hips: '', thighs: '' })
   const fileRef = useRef(null)
 
   useEffect(() => {
     fetchWeights(); fetchFood(); fetchProfile()
-    fetchSessions(); fetchHabits(); fetchPhotos()
-  }, [fetchWeights, fetchFood, fetchProfile, fetchSessions, fetchHabits, fetchPhotos])
+    fetchSessions(); fetchHabits(); fetchPhotos(); fetchMeas()
+  }, [fetchWeights, fetchFood, fetchProfile, fetchSessions, fetchHabits, fetchPhotos, fetchMeas])
 
   const today = todayStr()
 
@@ -207,6 +220,42 @@ export default function ProgressTab() {
   )
   const pickedPhotos = picked.map((id) => (photos || []).find((p) => p.id === id)).filter(Boolean)
 
+  // ---- measurements ----
+  const sortedMeas = useMemo(
+    () => [...(measurements || [])].sort((a, b) => (a.date || '').localeCompare(b.date || '')),
+    [measurements]
+  )
+  const measByMetric = useMemo(() => {
+    const out = {}
+    for (const m of MEAS_METRICS) {
+      const series = sortedMeas
+        .filter((d) => d[m.key] != null && d[m.key] !== '' && Number.isFinite(Number(d[m.key])))
+        .map((d) => ({ label: (d.date || '').slice(5).replace('-', '/'), value: Number(d[m.key]) }))
+      const latest = series.length ? series[series.length - 1].value : null
+      const prev = series.length >= 2 ? series[series.length - 2].value : null
+      out[m.key] = { series, latest, change: latest != null && prev != null ? latest - prev : null }
+    }
+    return out
+  }, [sortedMeas])
+  const hasAnyMeas = MEAS_METRICS.some((m) => measByMetric[m.key].latest != null)
+
+  async function handleAddMeasurement(e) {
+    e.preventDefault()
+    const payload = { date: measForm.date }
+    let any = false
+    for (const m of MEAS_METRICS) {
+      const raw = measForm[m.key]
+      if (raw !== '' && raw != null && Number.isFinite(Number(raw))) {
+        payload[m.key] = Number(raw)
+        any = true
+      }
+    }
+    if (!any) return
+    await addMeas(payload)
+    setMeasForm({ date: todayStr(), waist: '', chest: '', arms: '', hips: '', thighs: '' })
+    setShowMeasModal(false)
+  }
+
   return (
     <div className="space-y-5">
       {/* ---- Coach panel ---- */}
@@ -312,6 +361,77 @@ export default function ProgressTab() {
             <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1 mt-3">Protein / day · target {nutTargets.protein}g</div>
             <LineChart data={nutrition.prot} color={COLOR} target={nutTargets.protein} height={130} yLabel="g" />
           </>
+        )}
+      </Card>
+
+      {/* ---- Body measurements ---- */}
+      <Card accentColor={COLOR} className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold text-white/40 uppercase tracking-widest">📐 Measurements</div>
+          <button onClick={() => setShowMeasModal(true)}
+            className="btn-press text-[11px] font-bold px-2.5 py-1 rounded-full"
+            style={{ color: COLOR, border: `1px solid ${COLOR}40` }}>+ Log</button>
+        </div>
+
+        {lMeas && <div className="flex justify-center py-4"><LoadingSpinner color={COLOR} size={22} /></div>}
+
+        {!lMeas && !hasAnyMeas ? (
+          <div className="text-center py-6 text-white/30">
+            <div className="text-3xl mb-1">📐</div>
+            <p className="text-sm font-semibold">No measurements yet</p>
+            <p className="text-[11px] mt-1">Track waist, chest, arms & more (cm)</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Latest values with change */}
+            <div className="grid grid-cols-3 gap-2">
+              {MEAS_METRICS.map((m) => {
+                const d = measByMetric[m.key]
+                if (d.latest == null) return null
+                return (
+                  <div key={m.key} className="text-center p-2 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="text-[9px] text-white/35 uppercase tracking-wider mb-0.5">{m.icon} {m.label}</div>
+                    <div className="text-sm font-black text-white">{d.latest}<span className="text-[10px] text-white/40 font-semibold">cm</span></div>
+                    {d.change != null && (
+                      <div className="text-[10px] font-bold" style={{ color: d.change === 0 ? 'rgba(255,255,255,0.4)' : d.change < 0 ? '#10B981' : '#F97316' }}>
+                        {d.change > 0 ? '+' : ''}{d.change.toFixed(1)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Per-metric trend charts */}
+            {MEAS_METRICS.map((m) => {
+              const d = measByMetric[m.key]
+              if (d.series.length < 2) return null
+              return (
+                <div key={m.key}>
+                  <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">{m.icon} {m.label} · cm</div>
+                  <LineChart data={d.series} color={COLOR} height={110} yLabel="cm" />
+                </div>
+              )
+            })}
+
+            {/* Entry log with delete */}
+            <div className="space-y-1.5 pt-1">
+              {[...(measurements || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((m) => {
+                const parts = MEAS_METRICS
+                  .filter((mm) => m[mm.key] != null && m[mm.key] !== '')
+                  .map((mm) => `${mm.label} ${m[mm.key]}`)
+                return (
+                  <div key={m.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-bold text-white/70">{m.date}</div>
+                      <div className="text-[10px] text-white/40 truncate">{parts.join(' · ') || '—'}</div>
+                    </div>
+                    <button onClick={() => deleteMeas(m.id)} className="text-white/15 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
       </Card>
 
@@ -438,6 +558,33 @@ export default function ProgressTab() {
           <button type="submit" className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
             style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 30px ${COLOR}50` }}>
             Save Weight
+          </button>
+        </form>
+      </Modal>
+
+      {/* ---- Log measurements modal ---- */}
+      <Modal isOpen={showMeasModal} onClose={() => setShowMeasModal(false)} title="Log Measurements" accentColor={COLOR}>
+        <form onSubmit={handleAddMeasurement} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Date</label>
+            <input type="date" value={measForm.date} onChange={(e) => setMeasForm((f) => ({ ...f, date: e.target.value }))}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-[#7C3AED] transition-colors" />
+          </div>
+          <p className="text-[11px] text-white/35">Enter values in cm. Leave blank to skip a metric.</p>
+          <div className="grid grid-cols-2 gap-3">
+            {MEAS_METRICS.map((m) => (
+              <div key={m.key}>
+                <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">{m.icon} {m.label}</label>
+                <input type="number" step="0.1" inputMode="decimal" value={measForm[m.key]}
+                  onChange={(e) => setMeasForm((f) => ({ ...f, [m.key]: e.target.value }))}
+                  placeholder="cm"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED] transition-colors" />
+              </div>
+            ))}
+          </div>
+          <button type="submit" className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
+            style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 30px ${COLOR}50` }}>
+            Save Measurements
           </button>
         </form>
       </Modal>

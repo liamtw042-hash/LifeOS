@@ -6,6 +6,7 @@ import Card from '../components/Card'
 import Modal from '../components/Modal'
 import { SPLIT, DAY_ORDER } from '../data/trainingProgram'
 import { todayDayKey } from '../lib/training'
+import { computeAchievements } from '../lib/achievements'
 
 const FITNESS = '#7C3AED'
 const CYAN = '#06B6D4'
@@ -113,15 +114,23 @@ export default function Dashboard() {
   const {
     docs: dailyGoals, fetchDocs: fetchDaily, addDocument: addDaily, updateDocument: updateDaily,
   } = useFirestore('dailyGoals')
+  const { docs: sessions, fetchDocs: fetchSessions } = useFirestore('workoutSessions')
+  const { docs: weights, fetchDocs: fetchWeights } = useFirestore('weights')
+  const { docs: journal, fetchDocs: fetchJournal } = useFirestore('journal')
+  const { docs: foodLog, fetchDocs: fetchFood } = useFirestore('foodLog')
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
     fetchHabits()
     fetchGoals()
     fetchDaily()
+    fetchSessions()
+    fetchWeights()
+    fetchJournal()
+    fetchFood()
     const timer = setInterval(() => setTime(new Date()), 60000)
     return () => clearInterval(timer)
-  }, [fetchHabits, fetchGoals, fetchDaily])
+  }, [fetchHabits, fetchGoals, fetchDaily, fetchSessions, fetchWeights, fetchJournal, fetchFood])
 
   const today = todayStr()
   const tomorrow = shiftDate(today, 1)
@@ -144,6 +153,13 @@ export default function Dashboard() {
 
   const streak = calcOverallStreak()
   const name = user?.displayName?.split(' ')[0] || 'there'
+
+  // ---- Achievements ----
+  const achievements = useMemo(
+    () => computeAchievements({ sessions, habits, foodLog, weights, journal, today }),
+    [sessions, habits, foodLog, weights, journal, today]
+  )
+  const earnedCount = achievements.filter((a) => a.earned).length
 
   // ---- Today's training split ----
   const todayKey = todayDayKey()
@@ -556,6 +572,60 @@ export default function Dashboard() {
         >
           {savedTmr ? 'Saved ✓' : "Save tomorrow's goals"}
         </button>
+      </CollapsibleSection>
+
+      {/* ---- Achievements ---- */}
+      <CollapsibleSection
+        storageKey="dash.section.achievements"
+        defaultOpen={false}
+        accentColor={GOAL_COLOR}
+        icon="🏅"
+        title="Achievements"
+        summary={`${earnedCount}/${achievements.length} earned`}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          {achievements.map((a) => (
+            <div
+              key={a.id}
+              className="p-3 rounded-2xl border flex flex-col items-center text-center transition-all"
+              style={{
+                background: a.earned ? `${GOAL_COLOR}18` : 'rgba(255,255,255,0.03)',
+                borderColor: a.earned ? `${GOAL_COLOR}70` : 'rgba(255,255,255,0.08)',
+                boxShadow: a.earned ? `0 0 16px ${GOAL_COLOR}45` : 'none',
+                opacity: a.earned ? 1 : 0.55,
+              }}
+            >
+              <div
+                className="text-3xl mb-1.5"
+                style={{ filter: a.earned ? `drop-shadow(0 0 8px ${GOAL_COLOR})` : 'grayscale(1)' }}
+              >
+                {a.icon}
+              </div>
+              <div className={`text-[13px] font-black leading-tight ${a.earned ? 'text-white' : 'text-white/60'}`}>
+                {a.title}
+              </div>
+              <div className="text-[10px] text-white/40 mt-0.5 leading-snug">{a.desc}</div>
+              {a.earned ? (
+                <div className="text-[10px] font-bold mt-1.5" style={{ color: GOAL_COLOR }}>✓ Earned</div>
+              ) : (
+                <div className="w-full mt-2">
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.round((a.progress.current / a.progress.target) * 100)}%`,
+                        background: GOAL_COLOR,
+                      }}
+                    />
+                  </div>
+                  <div className="text-[10px] font-bold text-white/45 mt-1">
+                    {a.progress.current}/{a.progress.target}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </CollapsibleSection>
 
       {/* ---- Add Habit modal ---- */}
