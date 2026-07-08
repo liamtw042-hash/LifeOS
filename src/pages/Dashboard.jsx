@@ -405,6 +405,21 @@ export default function Dashboard() {
         </button>
       </Card>
 
+      {/* ---- Calendar entry ---- */}
+      <Card accentColor="#7C3AED" className="p-0 overflow-hidden" hover>
+        <button
+          onClick={() => navigate('/calendar')}
+          className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
+        >
+          <span className="text-lg flex-shrink-0">🗓️</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-white text-[15px]">Calendar</div>
+            <div className="text-[11px] text-white/40">Workouts, assignments, journal & weigh-ins by day</div>
+          </div>
+          <span className="text-white/40 text-sm flex-shrink-0">→</span>
+        </button>
+      </Card>
+
       {/* ---- Today strip: training / rest + week strip ---- */}
       <Card accentColor={FITNESS} className="p-4">
         <div className="flex items-center justify-between mb-3">

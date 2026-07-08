@@ -13,6 +13,7 @@ const Fitness = lazy(() => import('./pages/Fitness'))
 const Review = lazy(() => import('./pages/Review'))
 const Journal = lazy(() => import('./pages/Journal'))
 const School = lazy(() => import('./pages/School'))
+const Calendar = lazy(() => import('./pages/Calendar'))
 const Wellness = lazy(() => import('./pages/Wellness'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -53,6 +54,7 @@ function AppRoutes() {
           <Route path="/review" element={<Review />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/school" element={<School />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/wellness" element={<Wellness />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
