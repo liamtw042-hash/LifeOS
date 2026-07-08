@@ -5,7 +5,7 @@ import { useFirestore } from '../hooks/useFirestore'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
 import { formatWeight } from '../lib/units'
-import { exportAllData, importAllData } from '../lib/dataTransfer'
+import { exportAllData, exportCsv, importAllData } from '../lib/dataTransfer'
 import {
   REMINDER_DEFS, defaultReminders, isSupported,
   permissionStatus, requestPermission,
@@ -146,6 +146,19 @@ export default function Settings() {
       setDataMsg({ type: 'ok', text: `Exported ${res.total} items across ${res.collections} collections.` })
     } catch (e) {
       setDataMsg({ type: 'err', text: `Export failed: ${e.message}` })
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function handleExportCsv() {
+    setBusy('csv')
+    setDataMsg(null)
+    try {
+      const res = await exportCsv({ getIdToken, uid: user.uid })
+      setDataMsg({ type: 'ok', text: `Exported ${res.files} CSV files (${res.rows} rows).` })
+    } catch (e) {
+      setDataMsg({ type: 'err', text: `CSV export failed: ${e.message}` })
     } finally {
       setBusy('')
     }
@@ -325,13 +338,17 @@ export default function Settings() {
             <span>⬆️</span> {busy === 'import' ? 'Importing…' : 'Import'}
           </button>
         </div>
+        <button onClick={handleExportCsv} disabled={busy === 'csv'}
+          className="btn-press w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white/80 disabled:opacity-50">
+          <span>📊</span> {busy === 'csv' ? 'Exporting CSV…' : 'Export CSV'}
+        </button>
         <input ref={fileRef} type="file" accept="application/json" onChange={handlePickFile} className="hidden" />
         {dataMsg && (
           <p className={`text-[12px] font-semibold ${dataMsg.type === 'err' ? 'text-red-400' : 'text-green-400'}`}>
             {dataMsg.text}
           </p>
         )}
-        <p className="text-[11px] text-white/35">Export downloads a JSON backup. Import adds to your existing data (never deletes).</p>
+        <p className="text-[11px] text-white/35">Export downloads a full JSON backup. Export CSV downloads readable spreadsheets (weights, nutrition, workouts). Import adds to your existing data (never deletes).</p>
       </Section>
 
       {/* Account */}

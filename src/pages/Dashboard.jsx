@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import { SPLIT, DAY_ORDER } from '../data/trainingProgram'
 import { todayDayKey } from '../lib/training'
 import { computeAchievements } from '../lib/achievements'
+import GlobalSearch from '../components/GlobalSearch'
 
 const FITNESS = '#7C3AED'
 const CYAN = '#06B6D4'
@@ -160,6 +161,7 @@ export default function Dashboard() {
   const { docs: foodLog, fetchDocs: fetchFood } = useFirestore('foodLog')
   const { docs: settingsDocs, fetchDocs: fetchSettings } = useFirestore('settings')
   const [time, setTime] = useState(new Date())
+  const [searchOpen, setSearchOpen] = useState(false)
 
   useEffect(() => {
     fetchHabits()
@@ -324,6 +326,13 @@ export default function Dashboard() {
           </h1>
         </div>
         <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
+            aria-label="Search"
+          >
+            🔍
+          </button>
           <button
             onClick={() => navigate('/settings')}
             className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
@@ -717,6 +726,9 @@ export default function Dashboard() {
           ))}
         </div>
       </CollapsibleSection>
+
+      {/* ---- Global search ---- */}
+      <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* ---- Add Habit modal ---- */}
       <Modal isOpen={habitModal} onClose={() => setHabitModal(false)} title="New Habit" accentColor={CYAN}>
