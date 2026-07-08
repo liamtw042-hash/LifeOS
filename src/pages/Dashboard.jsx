@@ -51,6 +51,48 @@ function calcStreak(completions) {
   return streak
 }
 
+function CollapsibleSection({ storageKey, defaultOpen = false, accentColor, icon, title, summary, children }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(storageKey)
+      return v === null ? defaultOpen : v === '1'
+    } catch {
+      return defaultOpen
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, open ? '1' : '0') } catch {}
+  }, [storageKey, open])
+
+  return (
+    <Card accentColor={accentColor} className="p-0 overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
+      >
+        <span className="text-lg flex-shrink-0">{icon}</span>
+        <span className="flex-1 font-bold text-white text-[15px] truncate">{title}</span>
+        {summary != null && summary !== '' && (
+          <span className="text-xs font-semibold text-white/40 flex-shrink-0">{summary}</span>
+        )}
+        <span
+          className="text-white/40 text-xs flex-shrink-0 transition-transform duration-300"
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        >
+          ▾
+        </span>
+      </button>
+      <div
+        className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+      >
+        <div className="overflow-hidden">
+          <div className="px-4 pb-4 pt-0.5">{children}</div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -285,15 +327,21 @@ export default function Dashboard() {
         </div>
       </Card>
 
-      {/* ---- Today's goals + set tomorrow's ---- */}
-      <Card accentColor="#EAB308" className="p-4">
-        <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Today's 3 Goals</div>
+      {/* ---- Today's 3 Goals ---- */}
+      <CollapsibleSection
+        storageKey="dash.section.todayGoals"
+        defaultOpen
+        accentColor="#EAB308"
+        icon="🎯"
+        title="Today's Goals"
+        summary={todayGoals.length ? `${todayGoals.filter((g) => g.done).length}/${todayGoals.length} done` : 'None set'}
+      >
         {todayGoals.length === 0 ? (
-          <p className="text-sm text-white/35 mb-4">
-            No goals set for today. Set 3 each night for the day ahead 👇
+          <p className="text-sm text-white/35">
+            No goals set for today. Plan tomorrow's below 👇
           </p>
         ) : (
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2">
             {todayGoals.map((g, i) => (
               <button
                 key={i}
@@ -316,91 +364,23 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-
-        <div className="pt-3 border-t border-white/10">
-          <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Set tomorrow's 3 goals</div>
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => (
-              <input
-                key={i}
-                value={tmrForm[i]}
-                onChange={(e) => setTmrForm((f) => f.map((v, j) => (j === i ? e.target.value : v)))}
-                placeholder={`Goal ${i + 1}`}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 text-sm focus:border-[#EAB308] transition-colors"
-              />
-            ))}
-          </div>
-          <button
-            onClick={saveTomorrowGoals}
-            className="btn-press w-full mt-2 py-2.5 rounded-xl font-bold text-black text-sm"
-            style={{ background: 'linear-gradient(135deg, #EAB308, #CA8A04)', boxShadow: '0 0 20px #EAB30840' }}
-          >
-            {savedTmr ? 'Saved ✓' : "Save tomorrow's goals"}
-          </button>
-        </div>
-      </Card>
-
-      {/* ---- Today's habits ---- */}
-      <Card accentColor={CYAN} className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Today's Habits</div>
-          <button onClick={() => setHabitModal(true)} className="btn-press text-[11px] font-bold" style={{ color: CYAN }}>
-            + Add
-          </button>
-        </div>
-        {habits.length === 0 ? (
-          <div className="text-center py-2">
-            <p className="text-sm text-white/35 mb-3">No habits yet. Seed a starter set for fitness.</p>
-            <button
-              onClick={seedStarterHabits}
-              className="btn-press w-full py-2.5 rounded-xl font-bold text-white text-sm"
-              style={{ background: `linear-gradient(135deg, ${CYAN}, #0891B2)`, boxShadow: `0 0 20px ${CYAN}40` }}
-            >
-              ➕ Add starter habits
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {habits.map((habit) => {
-              const completions = habit.completions || []
-              const done = completions.includes(today)
-              const hStreak = calcStreak(completions)
-              return (
-                <div key={habit.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <button
-                    onClick={() => toggleHabit(habit)}
-                    className="btn-press w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                    style={{
-                      background: done ? CYAN : 'rgba(255,255,255,0.05)',
-                      border: `2px solid ${done ? CYAN : 'rgba(255,255,255,0.15)'}`,
-                      boxShadow: done ? `0 0 12px ${CYAN}60` : 'none',
-                    }}
-                  >
-                    {done && <span className="text-white text-sm animate-checkmark">✓</span>}
-                  </button>
-                  <span className="text-base">{habit.emoji || '✅'}</span>
-                  <span className={`flex-1 text-sm font-bold ${done ? 'text-white/40 line-through' : 'text-white'}`}>
-                    {habit.name}
-                  </span>
-                  <span className="text-sm font-black text-white flex-shrink-0">{hStreak > 0 ? `${hStreak}🔥` : '–'}</span>
-                  <button onClick={() => deleteHabit(habit.id)} className="text-white/15 hover:text-red-400 transition-colors text-sm flex-shrink-0">✕</button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+      </CollapsibleSection>
 
       {/* ---- Long-term goals ---- */}
-      <Card accentColor={GOAL_COLOR} className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Goals</div>
+      <CollapsibleSection
+        storageKey="dash.section.goals"
+        accentColor={GOAL_COLOR}
+        icon="🏆"
+        title="Goals"
+        summary={goals.length ? `${activeGoals.length} active` : 'None'}
+      >
+        <div className="flex justify-end mb-3">
           <button onClick={() => setGoalModal(true)} className="btn-press text-[11px] font-bold" style={{ color: GOAL_COLOR }}>
             + Add
           </button>
         </div>
         {goals.length === 0 ? (
-          <p className="text-sm text-white/35 py-2">No goals yet. Add a long-term goal to track progress and milestones.</p>
+          <p className="text-sm text-white/35 py-1">No goals yet. Add a long-term goal to track progress and milestones.</p>
         ) : (
           <div className="space-y-3">
             {goals.map((goal) => (
@@ -458,7 +438,93 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </Card>
+      </CollapsibleSection>
+
+      {/* ---- Today's habits ---- */}
+      <CollapsibleSection
+        storageKey="dash.section.habits"
+        defaultOpen
+        accentColor={CYAN}
+        icon="✅"
+        title="Habits"
+        summary={habits.length ? `${habitsToday.length}/${habits.length} today` : 'None'}
+      >
+        <div className="flex justify-end mb-3">
+          <button onClick={() => setHabitModal(true)} className="btn-press text-[11px] font-bold" style={{ color: CYAN }}>
+            + Add
+          </button>
+        </div>
+        {habits.length === 0 ? (
+          <div className="text-center py-2">
+            <p className="text-sm text-white/35 mb-3">No habits yet. Seed a starter set for fitness.</p>
+            <button
+              onClick={seedStarterHabits}
+              className="btn-press w-full py-2.5 rounded-xl font-bold text-white text-sm"
+              style={{ background: `linear-gradient(135deg, ${CYAN}, #0891B2)`, boxShadow: `0 0 20px ${CYAN}40` }}
+            >
+              ➕ Add starter habits
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {habits.map((habit) => {
+              const completions = habit.completions || []
+              const done = completions.includes(today)
+              const hStreak = calcStreak(completions)
+              return (
+                <div key={habit.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                  <button
+                    onClick={() => toggleHabit(habit)}
+                    className="btn-press w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{
+                      background: done ? CYAN : 'rgba(255,255,255,0.05)',
+                      border: `2px solid ${done ? CYAN : 'rgba(255,255,255,0.15)'}`,
+                      boxShadow: done ? `0 0 12px ${CYAN}60` : 'none',
+                    }}
+                  >
+                    {done && <span className="text-white text-sm animate-checkmark">✓</span>}
+                  </button>
+                  <span className="text-base">{habit.emoji || '✅'}</span>
+                  <span className={`flex-1 text-sm font-bold ${done ? 'text-white/40 line-through' : 'text-white'}`}>
+                    {habit.name}
+                  </span>
+                  <span className="text-sm font-black text-white flex-shrink-0">{hStreak > 0 ? `${hStreak}🔥` : '–'}</span>
+                  <button onClick={() => deleteHabit(habit.id)} className="text-white/15 hover:text-red-400 transition-colors text-sm flex-shrink-0">✕</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CollapsibleSection>
+
+      {/* ---- Plan tomorrow ---- */}
+      <CollapsibleSection
+        storageKey="dash.section.planTomorrow"
+        accentColor="#EAB308"
+        icon="🌙"
+        title="Plan Tomorrow"
+        summary={(tomorrowGoalDoc?.goals || []).length ? `${(tomorrowGoalDoc?.goals || []).length} set` : 'Not set'}
+      >
+        <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-2">Set tomorrow's 3 goals</div>
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <input
+              key={i}
+              value={tmrForm[i]}
+              onChange={(e) => setTmrForm((f) => f.map((v, j) => (j === i ? e.target.value : v)))}
+              placeholder={`Goal ${i + 1}`}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 text-sm focus:border-[#EAB308] transition-colors"
+            />
+          ))}
+        </div>
+        <button
+          onClick={saveTomorrowGoals}
+          className="btn-press w-full mt-2 py-2.5 rounded-xl font-bold text-black text-sm"
+          style={{ background: 'linear-gradient(135deg, #EAB308, #CA8A04)', boxShadow: '0 0 20px #EAB30840' }}
+        >
+          {savedTmr ? 'Saved ✓' : "Save tomorrow's goals"}
+        </button>
+      </CollapsibleSection>
 
       {/* ---- Add Habit modal ---- */}
       <Modal isOpen={habitModal} onClose={() => setHabitModal(false)} title="New Habit" accentColor={CYAN}>

@@ -4,8 +4,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
-import Goals from './pages/Goals'
-import Habits from './pages/Habits'
 import Fitness from './pages/Fitness'
 import Journal from './pages/Journal'
 import School from './pages/School'
@@ -28,8 +26,6 @@ function ProtectedRoutes() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/goals" element={<Goals />} />
-        <Route path="/habits" element={<Habits />} />
         <Route path="/fitness" element={<Fitness />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/school" element={<School />} />
