@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import * as fs from '../firestoreRest'
 
@@ -7,17 +7,20 @@ export function useFirestore(collection) {
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const pendingCreatesRef = useRef(new Map())
 
   const fetchDocs = useCallback(async () => {
-    if (!user) return
+    if (!user) return false
     setLoading(true)
     setError(null)
     try {
       const token = await getIdToken()
       const data = await fs.queryDocs(collection, user.uid, token)
       setDocs(data)
+      return true
     } catch (e) {
       setError(e.message)
+      return false
     } finally {
       setLoading(false)
     }
@@ -33,15 +36,22 @@ export function useFirestore(collection) {
     // Optimistic update
     const tempId = 'temp_' + Date.now()
     setDocs((prev) => [{ id: tempId, ...newDoc }, ...prev])
-    try {
+    const createPromise = (async () => {
       const token = await getIdToken()
       const saved = await fs.addDoc(collection, newDoc, token)
       setDocs((prev) => prev.map((d) => (d.id === tempId ? saved : d)))
+      return saved
+    })()
+    pendingCreatesRef.current.set(tempId, createPromise)
+    try {
+      const saved = await createPromise
       return saved
     } catch (e) {
       setDocs((prev) => prev.filter((d) => d.id !== tempId))
       setError(e.message)
       return null
+    } finally {
+      pendingCreatesRef.current.delete(tempId)
     }
   }, [collection, user, getIdToken])
 
@@ -50,7 +60,16 @@ export function useFirestore(collection) {
     setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, ...data } : d)))
     try {
       const token = await getIdToken()
-      await fs.updateDoc(collection, docId, data, token)
+      let realId = docId
+      // If this doc is still an in-flight optimistic create, wait for its
+      // real id before patching so we don't PATCH a temp_ id (404).
+      if (String(docId).startsWith('temp_') && pendingCreatesRef.current.has(docId)) {
+        const saved = await pendingCreatesRef.current.get(docId)
+        realId = saved.id
+        // Re-apply the optimistic update to the real id too.
+        setDocs((prev) => prev.map((d) => (d.id === realId ? { ...d, ...data } : d)))
+      }
+      await fs.updateDoc(collection, realId, data, token)
     } catch (e) {
       setError(e.message)
       // Revert on error - re-fetch from server to resync
@@ -63,7 +82,12 @@ export function useFirestore(collection) {
     setDocs((prev) => prev.filter((d) => d.id !== docId))
     try {
       const token = await getIdToken()
-      await fs.deleteDoc(collection, docId, token)
+      let realId = docId
+      if (String(docId).startsWith('temp_') && pendingCreatesRef.current.has(docId)) {
+        const saved = await pendingCreatesRef.current.get(docId)
+        realId = saved.id
+      }
+      await fs.deleteDoc(collection, realId, token)
     } catch (e) {
       setError(e.message)
     }

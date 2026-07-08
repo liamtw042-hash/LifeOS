@@ -292,9 +292,9 @@ export default function TrainTab() {
 
     const volume = estimateVolume(exercises)
     const totalSets = exercises.reduce(
-      (a, ex) => a + ex.sets.filter((s) => s.done).length || 0,
+      (a, ex) => a + ex.sets.filter((s) => s.done && !s.warmup).length,
       0
-    ) || exercises.reduce((a, ex) => a + ex.sets.length, 0)
+    ) || exercises.reduce((a, ex) => a + ex.sets.filter((s) => !s.warmup).length, 0)
     const durationMin = startedAt
       ? Math.max(1, Math.round((Date.now() - startedAt) / 60000))
       : 0
@@ -324,7 +324,7 @@ export default function TrainTab() {
   const elapsedSec = startedAt ? Math.floor((nowTick - startedAt) / 1000) % 60 : 0
 
   const doneSetCount = useMemo(
-    () => session.reduce((a, ex) => a + ex.sets.filter((s) => s.done).length, 0),
+    () => session.reduce((a, ex) => a + ex.sets.filter((s) => s.done && !s.warmup).length, 0),
     [session]
   )
   const liveVolume = useMemo(() => {
@@ -1287,8 +1287,13 @@ function PlateCalculator({ isOpen, prefill, onClose }) {
   const [oneRMWeight, setOneRMWeight] = useState('')
   const [oneRMReps, setOneRMReps] = useState('')
 
+  // Reset target and %1RM inputs each time the calculator opens, seeding
+  // target from prefill when it's a positive weight.
   useEffect(() => {
-    if (isOpen && prefill != null && prefill > 0) setTarget(String(prefill))
+    if (!isOpen) return
+    setTarget(prefill != null && prefill > 0 ? String(prefill) : '')
+    setOneRMWeight('')
+    setOneRMReps('')
   }, [isOpen, prefill])
 
   const bd = plateBreakdown(Number(target), Number(bar) || 0, KG_PLATES)
@@ -1321,7 +1326,9 @@ function PlateCalculator({ isOpen, prefill, onClose }) {
           <div className="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-2">Per side</div>
           {bd.perSide.length === 0 ? (
             <div className="text-sm text-white/50">
-              {Number(target) > 0 ? 'Just the bar (or below bar weight).' : 'Enter a target weight.'}
+              {Number(target) > 0
+                ? (bd.belowBar ? 'Target is below the bar weight.' : 'Just the bar.')
+                : 'Enter a target weight.'}
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -1333,7 +1340,9 @@ function PlateCalculator({ isOpen, prefill, onClose }) {
             </div>
           )}
           <div className="text-[11px] text-white/40 mt-2">
-            Loads to {bd.loadedTotal}kg{bd.leftover > 0 ? ` · ${bd.leftover}kg short (no plate fits)` : ''}
+            {bd.belowBar
+              ? `Target below bar weight (${bd.bar}kg)`
+              : `Loads to ${bd.loadedTotal}kg${bd.leftover > 0 ? ` · ${bd.leftover}kg short (no plate fits)` : ''}`}
           </div>
         </div>
 

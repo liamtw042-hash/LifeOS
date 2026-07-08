@@ -71,18 +71,24 @@ function OnboardingGate() {
   const { docs: settings, fetchDocs: fetchSettings } = useFirestore('settings')
   const [ready, setReady] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const fetchOkRef = useRef(false)
 
   useEffect(() => {
     let alive = true
     Promise.all([fetchProfiles(), fetchSettings()])
-      .catch(() => {})
+      .then(([okP, okS]) => { if (alive) fetchOkRef.current = !!(okP && okS) })
+      .catch(() => { if (alive) fetchOkRef.current = false })
       .finally(() => { if (alive) setReady(true) })
     return () => { alive = false }
   }, [fetchProfiles, fetchSettings])
 
   if (!ready) return <FullScreenLoader />
 
-  const brandNew = (profiles?.length || 0) === 0 && (settings?.length || 0) === 0
+  // Only treat as brand-new when BOTH fetches succeeded AND both are empty.
+  // On any fetch failure, fail open to the app (never force onboarding).
+  const brandNew = fetchOkRef.current
+    && (profiles?.length || 0) === 0
+    && (settings?.length || 0) === 0
   if (brandNew && !completed) {
     return (
       <Suspense fallback={<FullScreenLoader />}>

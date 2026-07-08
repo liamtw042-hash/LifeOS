@@ -71,7 +71,7 @@ export default function Onboarding({ onDone }) {
     setSaving(true)
     setErr('')
     try {
-      await addProfile({
+      const profile = {
         ...targets,
         age: Math.round(Number(age) || 0),
         sex,
@@ -79,13 +79,13 @@ export default function Onboarding({ onDone }) {
         weightKg: Number(Number(weightKg).toFixed(2)) || 0,
         activityLevel: ACTIVITY_LEVELS[activityLevel] != null ? activityLevel : 'moderate',
         goal,
-      })
-      const settings = { displayName: displayName.trim(), units }
+      }
       const gw = toKg(goalWeight, units)
       if (goalWeight !== '' && Number.isFinite(gw) && gw > 0) {
-        settings.goalWeight = Number(gw.toFixed(2))
+        profile.goalWeight = Number(gw.toFixed(2))
       }
-      await addSettings(settings)
+      await addProfile(profile)
+      await addSettings({ displayName: displayName.trim(), units })
       onDone?.()
     } catch (e) {
       setErr('Could not save. Please try again.')

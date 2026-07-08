@@ -99,9 +99,14 @@ export function plateBreakdown(target, bar = 20, plates = KG_PLATES) {
   const t = Number(target) || 0
   const b = Number(bar) || 0
   const perSideWeight = (t - b) / 2
-  const out = { perSide: [], loadedTotal: b, leftover: 0, bar: b }
+  const out = { perSide: [], loadedTotal: b, leftover: 0, bar: b, belowBar: false }
   if (perSideWeight <= 0) {
-    out.leftover = t > 0 && t < b ? t : 0
+    // Target is below the bar weight — nothing can be loaded.
+    if (t > 0 && t < b) {
+      out.loadedTotal = 0
+      out.leftover = t
+      out.belowBar = true
+    }
     return out
   }
   let remaining = perSideWeight

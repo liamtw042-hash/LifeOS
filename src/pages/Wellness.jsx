@@ -315,7 +315,7 @@ function ActivityTab() {
     [docs]
   )
 
-  const weekKeys = useMemo(() => new Set(lastNDays(7)), [])
+  const weekKeys = useMemo(() => new Set(lastNDays(7)), [todayStr()])
   const weekTotals = useMemo(() => {
     let minutes = 0, steps = 0
     for (const d of sorted) {
@@ -472,7 +472,7 @@ function SupplementsTab() {
   useEffect(() => { fetchDocs() }, [fetchDocs])
 
   const today = todayStr()
-  const week = useMemo(() => lastNDays(7), [])
+  const week = useMemo(() => lastNDays(7), [todayStr()])
 
   const list = useMemo(() => [...(docs || [])].filter(Boolean), [docs])
 

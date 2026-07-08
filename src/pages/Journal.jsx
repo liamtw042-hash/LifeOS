@@ -201,7 +201,7 @@ export default function Journal() {
               </div>
             </div>
             {expanded === entry.id && (
-              <div className="mt-3 pt-3 border-t border-white/08 flex justify-end">
+              <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
                 <button onClick={e => { e.stopPropagation(); deleteDocument(entry.id) }}
                   className="text-xs text-white/20 hover:text-red-400 transition-colors">
                   Delete entry
