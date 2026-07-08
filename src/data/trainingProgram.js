@@ -1,0 +1,305 @@
+// LifeOS — Phase 2 Training program
+// Science-based 5-day hypertrophy split, tuned for a Gym Monster 2 all-in-one
+// cable machine. Weekday schedule:
+//   Mon = Push, Tue = Pull, Wed = Rest, Thu = Legs, Fri = Upper, Sat = Arms, Sun = Rest
+
+export const SPLIT = {
+  Mon: 'Push',
+  Tue: 'Pull',
+  Wed: 'Rest',
+  Thu: 'Legs',
+  Fri: 'Upper',
+  Sat: 'Arms',
+  Sun: 'Rest',
+}
+
+export const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+export const DAY_LABELS = {
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+  Sat: 'Saturday',
+  Sun: 'Sunday',
+}
+
+// Each exercise:
+// { name, muscle, type:'compound'|'isolation', repRange:[low,high],
+//   sets, tip (Gym Monster 2 cable cue), alternatives:[...] }
+
+export const WORKOUTS = {
+  Push: [
+    {
+      name: 'Incline Chest Press',
+      muscle: 'Upper Chest',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 4,
+      tip: 'Set the bench to a 30–45° incline and drop the dual cable pulleys to the lowest setting. Use the single-grip handles and press up and slightly inward so the cables meet over your upper chest. Great candidate for Eccentric mode — let the machine add resistance on the way down for the last 2 sets.',
+      alternatives: ['Cable Chest Press', 'Machine Chest Press', 'Push-ups'],
+    },
+    {
+      name: 'Cable Chest Press',
+      muscle: 'Chest',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Pulleys at chest height, handles in each hand, step forward into a split stance for stability. Press straight out and squeeze the pecs together at lockout. If you want extra tension at the stretch, engage Chains mode to lighten the bottom and load the top.',
+      alternatives: ['Incline Chest Press', 'Cable Fly', 'Push-ups'],
+    },
+    {
+      name: 'Cable Fly',
+      muscle: 'Chest',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Pulleys set high, a slight bend in the elbows locked throughout. Sweep the handles down and together in a hugging arc, pause for a 1-count squeeze. Eccentric mode shines here — resist the stretch slowly on the way back.',
+      alternatives: ['Pec Deck', 'Cable Chest Press', 'Dumbbell Fly'],
+    },
+    {
+      name: 'Overhead Press',
+      muscle: 'Shoulders',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Pulleys at the lowest setting, handles at shoulder height, brace your core. Press overhead without flaring the ribs. Use the seat with back support for strict presses; keep the cables slightly in front of you so tension stays on the delts.',
+      alternatives: ['Cable Lateral Raise', 'Machine Shoulder Press', 'Pike Push-ups'],
+    },
+    {
+      name: 'Tricep Pushdown',
+      muscle: 'Triceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Pulley set high with the straight bar or rope attachment. Elbows pinned to your sides, push down to full lockout and control the return. Rope lets you flare at the bottom for the outer head. Chains mode adds a nice peak-contraction overload.',
+      alternatives: ['Overhead Tricep Extension', 'Close-Grip Push-ups', 'Dips'],
+    },
+  ],
+  Pull: [
+    {
+      name: 'Lat Pulldown',
+      muscle: 'Lats',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 4,
+      tip: 'Attach the wide bar to the high pulley and use the seat with the thigh pad to anchor yourself. Pull the bar to your upper chest, driving elbows down and back, and control the stretch overhead. Eccentric mode is excellent for building the stretched-position strength that grows lats.',
+      alternatives: ['Pull-ups', 'Straight-Arm Pulldown', 'Assisted Pull-ups'],
+    },
+    {
+      name: 'Seated Cable Row',
+      muscle: 'Mid Back',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Low pulley with the close-grip V-handle, feet braced, chest tall. Row to your lower ribs and squeeze the shoulder blades together, then allow a full protracted stretch each rep. Keep a slight forward lean at the stretch, upright at the contraction.',
+      alternatives: ['Single-Arm Row', 'Bent-Over Row', 'Inverted Row'],
+    },
+    {
+      name: 'Single-Arm Row',
+      muscle: 'Lats',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'One handle on the low pulley, stagger your stance and brace your free hand on your thigh. Row the handle to your hip, letting the cable pull your shoulder into a deep stretch at the front. The unilateral cable path lets you really drive the elbow past your torso.',
+      alternatives: ['Seated Cable Row', 'Dumbbell Row', 'Inverted Row'],
+    },
+    {
+      name: 'Face Pull',
+      muscle: 'Rear Delts',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Rope attachment on a high pulley set just above your head. Pull the rope towards your forehead, driving the knuckles back and splitting the rope apart. Think external rotation — this bulletproofs the shoulders. Light weight, high reps, constant tension.',
+      alternatives: ['Rear Delt Fly', 'Reverse Pec Deck', 'Band Pull-Apart'],
+    },
+    {
+      name: 'Cable Bicep Curl',
+      muscle: 'Biceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Straight bar or dual handles on the low pulley, elbows pinned to your sides. Curl up with no swing and squeeze at the top. Cables keep tension through the whole range, unlike free weights. Chains mode overloads the peak contraction for the last set.',
+      alternatives: ['Hammer Curl', 'Dumbbell Curl', 'Chin-ups'],
+    },
+  ],
+  Legs: [
+    {
+      name: 'Goblet Squat',
+      muscle: 'Quads',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 4,
+      tip: 'Use a single low-pulley handle held at your chest like a goblet, or hold the attachment against your sternum. Sit down between your hips to depth, knees tracking over toes, chest up. The cable pulling forward helps you counterbalance and hit depth cleanly.',
+      alternatives: ['Bulgarian Split Squat', 'Leg Press', 'Bodyweight Squat'],
+    },
+    {
+      name: 'Romanian Deadlift',
+      muscle: 'Hamstrings',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Low pulley with the straight bar, cable running between your legs. Hinge at the hips with a soft knee, push your hips back until you feel a deep hamstring stretch, then drive the hips forward. Keep the bar close and your back flat throughout.',
+      alternatives: ['Leg Curl', 'Good Morning', 'Single-Leg RDL'],
+    },
+    {
+      name: 'Bulgarian Split Squat',
+      muscle: 'Quads',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Rear foot elevated on the bench, hold a handle from the low pulley on the working side for resistance and balance. Drop straight down until the front thigh is parallel, then drive up through the front heel. Brutal but the best single-leg builder.',
+      alternatives: ['Goblet Squat', 'Walking Lunge', 'Step-ups'],
+    },
+    {
+      name: 'Leg Curl',
+      muscle: 'Hamstrings',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Attach the ankle strap to the low pulley, face the machine and curl your heel towards your glute against the cable. Keep your hips still and control the eccentric. If your Gym Monster 2 has the leg-curl attachment, use it seated; otherwise standing single-leg with the ankle cuff.',
+      alternatives: ['Romanian Deadlift', 'Nordic Curl', 'Glute Ham Raise'],
+    },
+    {
+      name: 'Standing Calf Raise',
+      muscle: 'Calves',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 4,
+      tip: 'Stand on a small platform or plate, hold handles from the low pulley over your shoulders or at your sides for load. Rise all the way onto your toes, pause at the top, and get a deep stretch at the bottom. Slow tempo — calves respond to time under tension.',
+      alternatives: ['Seated Calf Raise', 'Leg Press Calf Raise', 'Single-Leg Calf Raise'],
+    },
+  ],
+  Upper: [
+    {
+      name: 'Cable Chest Press',
+      muscle: 'Chest',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 4,
+      tip: 'Pulleys at chest height, split stance, press straight out and squeeze at lockout. A reliable pressing anchor for upper day. Vary the angle set-to-set (slightly up, then flat) to hit the whole chest.',
+      alternatives: ['Incline Chest Press', 'Cable Fly', 'Push-ups'],
+    },
+    {
+      name: 'Lat Pulldown',
+      muscle: 'Lats',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 4,
+      tip: 'Wide bar on the high pulley, anchored under the thigh pad. Pull to the upper chest with elbows driving down, controlled overhead stretch each rep. Eccentric mode for the last set to load the stretch.',
+      alternatives: ['Pull-ups', 'Seated Cable Row', 'Assisted Pull-ups'],
+    },
+    {
+      name: 'Cable Lateral Raise',
+      muscle: 'Side Delts',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Single handle on the lowest pulley, cable crossing in front of your body. Raise the handle out to shoulder height leading with the elbow, little finger slightly up. The cable keeps tension at the bottom where dumbbells go slack — that is the magic for side delts.',
+      alternatives: ['Overhead Press', 'Dumbbell Lateral Raise', 'Upright Row'],
+    },
+    {
+      name: 'Seated Cable Row',
+      muscle: 'Mid Back',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Low pulley V-handle, chest tall, row to the lower ribs and squeeze the shoulder blades. Full stretch on the return. Keep the torso still — no heaving.',
+      alternatives: ['Single-Arm Row', 'Bent-Over Row', 'Inverted Row'],
+    },
+    {
+      name: 'Hammer Curl',
+      muscle: 'Biceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Rope attachment on the low pulley, neutral grip on the rope ends. Curl keeping the wrists neutral to load the brachialis and forearms. Squeeze at the top, slow on the way down. Builds arm thickness the standard curl misses.',
+      alternatives: ['Cable Bicep Curl', 'Dumbbell Hammer Curl', 'Chin-ups'],
+    },
+  ],
+  Arms: [
+    {
+      name: 'Overhead Press',
+      muscle: 'Shoulders',
+      type: 'compound',
+      repRange: [8, 12],
+      sets: 3,
+      tip: 'Low pulleys, handles at shoulder height, brace and press overhead without ribs flaring. Opening arm day with a compound primes the delts and triceps for the isolation work to follow.',
+      alternatives: ['Cable Lateral Raise', 'Machine Shoulder Press', 'Pike Push-ups'],
+    },
+    {
+      name: 'Cable Lateral Raise',
+      muscle: 'Side Delts',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 4,
+      tip: 'Lowest pulley, cable across the body, raise to shoulder height leading with the elbow. Constant tension from the bottom is exactly what caps the shoulders. Keep it strict — no momentum.',
+      alternatives: ['Overhead Press', 'Dumbbell Lateral Raise', 'Upright Row'],
+    },
+    {
+      name: 'Cable Bicep Curl',
+      muscle: 'Biceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 4,
+      tip: 'Straight bar on the low pulley, elbows pinned. Curl with no swing, full squeeze at the top, full stretch at the bottom. Chains mode on the final set to overload the peak.',
+      alternatives: ['Hammer Curl', 'Dumbbell Curl', 'Chin-ups'],
+    },
+    {
+      name: 'Tricep Pushdown',
+      muscle: 'Triceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 4,
+      tip: 'High pulley with rope or straight bar, elbows glued to your sides, push to full lockout. Rope allows a flare at the bottom for the outer head. Squeeze hard, control the return.',
+      alternatives: ['Overhead Tricep Extension', 'Close-Grip Push-ups', 'Dips'],
+    },
+    {
+      name: 'Overhead Tricep Extension',
+      muscle: 'Triceps',
+      type: 'isolation',
+      repRange: [12, 20],
+      sets: 3,
+      tip: 'Rope on the low pulley, face away, press the rope up and overhead then lower behind your head for a deep long-head stretch. Keep the elbows pointing forward and narrow. The overhead angle is what grows the triceps long head for arm size.',
+      alternatives: ['Tricep Pushdown', 'Skullcrusher', 'Dips'],
+    },
+  ],
+}
+
+// Bodyweight / "No gym" mode. Plank is logged in seconds (isTime), not reps.
+export const BODYWEIGHT = [
+  {
+    name: 'Push-ups',
+    muscle: 'Chest',
+    type: 'compound',
+    repRange: [10, 25],
+    sets: 4,
+    tip: 'Hands just outside shoulder width, body in a straight line from head to heels, brace the core. Lower until your chest is a fist off the floor and press away. Elevate your feet to make it harder, drop to knees to make it easier.',
+    alternatives: ['Incline Push-ups', 'Diamond Push-ups', 'Knee Push-ups'],
+  },
+  {
+    name: 'Pull-ups',
+    muscle: 'Back',
+    type: 'compound',
+    repRange: [5, 15],
+    sets: 4,
+    tip: 'Grip slightly wider than shoulders, start from a dead hang, pull your chest to the bar by driving the elbows down. Control the descent. Use a band or do inverted rows under a table if you can not yet do full reps.',
+    alternatives: ['Inverted Row', 'Chin-ups', 'Assisted Pull-ups'],
+  },
+  {
+    name: 'Plank',
+    muscle: 'Core',
+    type: 'isolation',
+    repRange: [30, 90],
+    sets: 3,
+    isTime: true,
+    tip: 'Forearms under the shoulders, body in one straight line, squeeze the glutes and brace the abs like bracing for a punch. Do not let the hips sag or pike. Logged in seconds — hold to near-failure each set.',
+    alternatives: ['Side Plank', 'Dead Bug', 'Hollow Hold'],
+  },
+]
+
+// Rest recommendation between sets by exercise type.
+export function restSeconds(type) {
+  return type === 'compound' ? 120 : 60
+}
