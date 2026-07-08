@@ -9,7 +9,7 @@ const ACTIONS = [
   { key: 'food', icon: '🍽️', label: 'Log food', to: '/fitness', state: { tab: 'food' } },
   { key: 'train', icon: '💪', label: 'Start workout', to: '/fitness', state: { tab: 'train' } },
   { key: 'journal', icon: '📓', label: 'Journal entry', to: '/journal' },
-  { key: 'goal', icon: '🎯', label: 'New goal', to: '/' },
+  { key: 'goal', icon: '🎯', label: 'New goal', to: '/', state: { action: 'newGoal' } },
 ]
 
 export default function QuickAdd() {

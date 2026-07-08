@@ -65,7 +65,10 @@ export async function exportAllData({ getIdToken, uid }) {
 
 function csvEscape(value) {
   if (value === null || value === undefined) return ''
-  const s = String(value)
+  let s = String(value)
+  // Neutralize spreadsheet formula injection: values starting with a formula
+  // trigger character (or leading tab/CR) get a single-quote prefix.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
   return s
 }

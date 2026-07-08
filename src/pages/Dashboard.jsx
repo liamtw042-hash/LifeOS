@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useFirestore } from '../hooks/useFirestore'
 import Card from '../components/Card'
@@ -144,6 +144,7 @@ function CollapsibleSection({ storageKey, defaultOpen = false, accentColor, icon
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const {
     docs: habits, fetchDocs: fetchHabits, addDocument: addHabit,
     updateDocument: updateHabit, deleteDocument: deleteHabit,
@@ -292,6 +293,16 @@ export default function Dashboard() {
   const [goalModal, setGoalModal] = useState(false)
   const [goalForm, setGoalForm] = useState({ emoji: '🎯', title: '', description: '', targetDate: '', progress: 0, milestones: [] })
   const [newMilestone, setNewMilestone] = useState('')
+
+  // QuickAdd "New goal" navigates here with intent — open the add-goal modal,
+  // expand the Goals section, then clear the state so it doesn't retrigger.
+  useEffect(() => {
+    if (location.state?.action === 'newGoal') {
+      setGoalModal(true)
+      try { localStorage.setItem('dash.section.goals', '1') } catch {}
+      navigate('.', { replace: true, state: null })
+    }
+  }, [location.state, navigate])
 
   async function submitGoal(e) {
     e.preventDefault()

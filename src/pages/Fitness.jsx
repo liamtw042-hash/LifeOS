@@ -177,6 +177,23 @@ function FoodTab() {
   const water = Number(dayDoc?.water) || 0
   const totals = useMemo(() => sumTotals(items), [items])
 
+  // Authoritative per-date {items, water} so rapid successive mutations chain
+  // off the latest values rather than the render-closed `items`/`water`.
+  const dayStateRef = useRef({})
+  // Pending create promise keyed by date so a create for day A in flight never
+  // gets patched with day B's items.
+  const pendingCreateByDate = useRef({})
+
+  useEffect(() => {
+    // Only (re)seed from the server doc when no create is in flight for this
+    // date — otherwise the optimistic ref state is the source of truth.
+    if (pendingCreateByDate.current[date]) return
+    dayStateRef.current[date] = {
+      items: dayDoc?.items || [],
+      water: Number(dayDoc?.water) || 0,
+    }
+  }, [dayDoc, date])
+
   const grouped = useMemo(() => {
     const g = { breakfast: [], lunch: [], dinner: [], snack: [], other: [] }
     items.forEach((it, idx) => {
@@ -197,11 +214,20 @@ function FoodTab() {
     : DEFAULT_TARGETS
 
   // ---- persistence helpers ----
-  // Serializes writes for the current day so two quick adds on a brand-new day
+  // Read the authoritative current state for a given day (falls back to the
+  // render-closed values when the ref hasn't been seeded yet).
+  function dayState(forDate) {
+    const s = dayStateRef.current[forDate]
+    if (s) return s
+    return { items: forDate === date ? items : [], water: forDate === date ? water : 0 }
+  }
+  // Serializes writes for a specific day so two quick adds on a brand-new day
   // don't both create/PATCH — the second waits for the first create's real id.
-  const pendingCreateRef = useRef(null)
-  async function persistDay(nextItems, nextWater) {
-    const existing = (foodLogs || []).find((d) => d.date === date)
+  async function persistDay(nextItems, nextWater, forDate = date) {
+    // Update the authoritative ref synchronously so chained mutations see it.
+    dayStateRef.current[forDate] = { items: nextItems, water: nextWater }
+
+    const existing = (foodLogs || []).find((d) => d.date === forDate)
     // Existing real doc — patch directly.
     if (existing && !String(existing.id).startsWith('temp_')) {
       await updateLog(existing.id, { items: nextItems, water: nextWater })
@@ -209,63 +235,93 @@ function FoodTab() {
     }
     // A create is already in flight for this day (optimistic temp doc present) —
     // wait for the real saved id, then update that instead of PATCHing temp_.
-    if (pendingCreateRef.current) {
-      const saved = await pendingCreateRef.current
+    if (pendingCreateByDate.current[forDate]) {
+      const saved = await pendingCreateByDate.current[forDate]
       if (saved?.id) {
         await updateLog(saved.id, { items: nextItems, water: nextWater })
         return
       }
     }
-    // No doc yet — create one and remember the in-flight promise.
-    const payload = { date, items: nextItems, water: nextWater }
+    // No doc yet — create one and remember the in-flight promise for this date.
+    const payload = { date: forDate, items: nextItems, water: nextWater }
     const p = addLog(payload)
-    pendingCreateRef.current = p
+    pendingCreateByDate.current[forDate] = p
     try {
       await p
     } finally {
-      if (pendingCreateRef.current === p) pendingCreateRef.current = null
+      if (pendingCreateByDate.current[forDate] === p) delete pendingCreateByDate.current[forDate]
     }
   }
   async function addItems(newItems, meal = selectedMeal) {
     const m = MEAL_KEYS.includes(meal) ? meal : 'other'
-    const cleaned = (newItems || []).map((it) => ({
-      name: String(it.name || 'Food'),
-      cal: Math.round(Number(it.cal) || 0),
-      p: Math.round(Number(it.p) || 0),
-      c: Math.round(Number(it.c) || 0),
-      f: Math.round(Number(it.f) || 0),
-      qty: Number(it.qty) || 1,
-      meal: m,
-    }))
+    const cleaned = (newItems || []).map((it) => {
+      const qty = Number(it.qty) || 1
+      // Per-unit base macros so later qty edits rescale without rounding drift.
+      const base = it.u && typeof it.u === 'object'
+        ? it.u
+        : {
+            cal: (Number(it.cal) || 0) / qty,
+            p: (Number(it.p) || 0) / qty,
+            c: (Number(it.c) || 0) / qty,
+            f: (Number(it.f) || 0) / qty,
+          }
+      return {
+        name: String(it.name || 'Food'),
+        cal: Math.round(Number(it.cal) || 0),
+        p: Math.round(Number(it.p) || 0),
+        c: Math.round(Number(it.c) || 0),
+        f: Math.round(Number(it.f) || 0),
+        qty,
+        // Preserve an item's own valid meal (copy-yesterday / templates keep
+        // their breakfast/lunch/dinner grouping); otherwise use the selection.
+        meal: MEAL_KEYS.includes(it.meal) ? it.meal : m,
+        u: { cal: base.cal, p: base.p, c: base.c, f: base.f },
+      }
+    })
     if (!cleaned.length) return
-    await persistDay([...items, ...cleaned], water)
+    const cur = dayState(date)
+    await persistDay([...cur.items, ...cleaned], cur.water)
   }
   async function removeItem(idx) {
-    await persistDay(items.filter((_, i) => i !== idx), water)
+    const cur = dayState(date)
+    await persistDay(cur.items.filter((_, i) => i !== idx), cur.water)
   }
   async function updateItem(idx, { qty, meal }) {
-    const cur = items[idx]
-    if (!cur) return
-    const oldQty = Number(cur.qty) || 1
+    const cur = dayState(date)
+    const target = cur.items[idx]
+    if (!target) return
     const newQty = Number(qty) || 1
-    const r = oldQty > 0 ? newQty / oldQty : 1
-    const next = items.map((it, i) => (
+    // Derive per-unit base once for legacy items that lack `u`.
+    const base = target.u && typeof target.u === 'object'
+      ? target.u
+      : (() => {
+          const oq = Number(target.qty) || 1
+          return {
+            cal: (Number(target.cal) || 0) / oq,
+            p: (Number(target.p) || 0) / oq,
+            c: (Number(target.c) || 0) / oq,
+            f: (Number(target.f) || 0) / oq,
+          }
+        })()
+    const next = cur.items.map((it, i) => (
       i === idx
         ? {
             ...it,
             qty: newQty,
-            cal: Math.round((Number(it.cal) || 0) * r),
-            p: Math.round((Number(it.p) || 0) * r),
-            c: Math.round((Number(it.c) || 0) * r),
-            f: Math.round((Number(it.f) || 0) * r),
+            cal: Math.round(base.cal * newQty),
+            p: Math.round(base.p * newQty),
+            c: Math.round(base.c * newQty),
+            f: Math.round(base.f * newQty),
             meal: MEAL_KEYS.includes(meal) ? meal : 'other',
+            u: base,
           }
         : it
     ))
-    await persistDay(next, water)
+    await persistDay(next, cur.water)
   }
   async function changeWater(delta) {
-    await persistDay(items, Math.max(0, water + delta))
+    const cur = dayState(date)
+    await persistDay(cur.items, Math.max(0, cur.water + delta))
   }
 
   // ---- natural language + inline macros ----

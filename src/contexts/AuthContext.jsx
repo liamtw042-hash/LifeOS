@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -38,10 +38,10 @@ export function AuthProvider({ children }) {
     return signOut(auth)
   }
 
-  async function getIdToken() {
+  const getIdToken = useCallback(async () => {
     if (!auth.currentUser) throw new Error('Not authenticated')
     return auth.currentUser.getIdToken()
-  }
+  }, [user])
 
   return (
     <AuthContext.Provider value={{ user, loading, login, signup, logout, getIdToken }}>
