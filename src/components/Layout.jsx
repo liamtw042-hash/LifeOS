@@ -19,7 +19,7 @@ export default function Layout({ children }) {
   const section = SECTION_MAP[location.pathname] || 'dashboard'
 
   return (
-    <div className="relative min-h-screen bg-black" style={{ paddingBottom: '80px' }}>
+    <div className="relative min-h-screen bg-black" style={{ paddingBottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
       <GradientBackground section={section} />
       <div className="relative z-10">
         {children}
