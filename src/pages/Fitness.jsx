@@ -26,6 +26,23 @@ const ACTIVITY_LABELS = {
 }
 const GOAL_LABELS = { cut: 'Cut', maintain: 'Maintain', bulk: 'Bulk' }
 
+const MEALS = [
+  { key: 'breakfast', label: 'Breakfast', icon: '🌅' },
+  { key: 'lunch', label: 'Lunch', icon: '☀️' },
+  { key: 'dinner', label: 'Dinner', icon: '🌙' },
+  { key: 'snack', label: 'Snack', icon: '🍿' },
+]
+const MEAL_KEYS = MEALS.map((m) => m.key)
+const MEAL_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack', other: 'Other' }
+function defaultMeal() {
+  const h = new Date().getHours()
+  if (h < 11) return 'breakfast'
+  if (h < 15) return 'lunch'
+  if (h < 18) return 'snack'
+  return 'dinner'
+}
+const PORTIONS = [0.5, 1, 1.5, 2]
+
 function localKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -123,8 +140,15 @@ function FoodTab() {
   const {
     docs: profiles, fetchDocs: fetchProfile, addDocument: addProfile, updateDocument: updateProfile,
   } = useFirestore('fitnessProfile')
+  const {
+    docs: recipes, fetchDocs: fetchRecipes, addDocument: addRecipe, deleteDocument: deleteRecipe,
+  } = useFirestore('recipes')
 
   const [date, setDate] = useState(todayStr())
+  const [selectedMeal, setSelectedMeal] = useState(defaultMeal())
+  const [portionMap, setPortionMap] = useState({})
+  const [editIdx, setEditIdx] = useState(null)
+  const [showRecipes, setShowRecipes] = useState(false)
   const [nlText, setNlText] = useState('')
   const [preview, setPreview] = useState(null) // { items, totals, unmatched, custom? }
   const [search, setSearch] = useState('')
@@ -138,8 +162,8 @@ function FoodTab() {
   const [customForm, setCustomForm] = useState({ name: '', cal: '', p: '', c: '', f: '', serving: '' })
 
   useEffect(() => {
-    fetchLogs(); fetchCustom(); fetchTemplates(); fetchProfile()
-  }, [fetchLogs, fetchCustom, fetchTemplates, fetchProfile])
+    fetchLogs(); fetchCustom(); fetchTemplates(); fetchProfile(); fetchRecipes()
+  }, [fetchLogs, fetchCustom, fetchTemplates, fetchProfile, fetchRecipes])
 
   const allFoods = useMemo(() => {
     const customMapped = (customFoods || []).map((c) => ({
@@ -152,6 +176,15 @@ function FoodTab() {
   const items = dayDoc?.items || []
   const water = Number(dayDoc?.water) || 0
   const totals = useMemo(() => sumTotals(items), [items])
+
+  const grouped = useMemo(() => {
+    const g = { breakfast: [], lunch: [], dinner: [], snack: [], other: [] }
+    items.forEach((it, idx) => {
+      const key = MEAL_KEYS.includes(it.meal) ? it.meal : 'other'
+      g[key].push({ it, idx })
+    })
+    return g
+  }, [items])
 
   const profile = (profiles || [])[0] || null
   const targets = profile
@@ -193,7 +226,8 @@ function FoodTab() {
       if (pendingCreateRef.current === p) pendingCreateRef.current = null
     }
   }
-  async function addItems(newItems) {
+  async function addItems(newItems, meal = selectedMeal) {
+    const m = MEAL_KEYS.includes(meal) ? meal : 'other'
     const cleaned = (newItems || []).map((it) => ({
       name: String(it.name || 'Food'),
       cal: Math.round(Number(it.cal) || 0),
@@ -201,12 +235,34 @@ function FoodTab() {
       c: Math.round(Number(it.c) || 0),
       f: Math.round(Number(it.f) || 0),
       qty: Number(it.qty) || 1,
+      meal: m,
     }))
     if (!cleaned.length) return
     await persistDay([...items, ...cleaned], water)
   }
   async function removeItem(idx) {
     await persistDay(items.filter((_, i) => i !== idx), water)
+  }
+  async function updateItem(idx, { qty, meal }) {
+    const cur = items[idx]
+    if (!cur) return
+    const oldQty = Number(cur.qty) || 1
+    const newQty = Number(qty) || 1
+    const r = oldQty > 0 ? newQty / oldQty : 1
+    const next = items.map((it, i) => (
+      i === idx
+        ? {
+            ...it,
+            qty: newQty,
+            cal: Math.round((Number(it.cal) || 0) * r),
+            p: Math.round((Number(it.p) || 0) * r),
+            c: Math.round((Number(it.c) || 0) * r),
+            f: Math.round((Number(it.f) || 0) * r),
+            meal: MEAL_KEYS.includes(meal) ? meal : 'other',
+          }
+        : it
+    ))
+    await persistDay(next, water)
   }
   async function changeWater(delta) {
     await persistDay(items, Math.max(0, water + delta))
@@ -352,6 +408,24 @@ function FoodTab() {
     setShowTemplates(false)
   }
 
+  // ---- recipes ----
+  function applyRecipe(rec) {
+    if (rec?.items?.length) addItems(rec.items)
+    setShowRecipes(false)
+  }
+  async function saveRecipe(rec) {
+    if (!rec?.name || !rec.items?.length) return
+    await addRecipe({ name: rec.name, items: rec.items, totals: rec.totals })
+  }
+
+  // ---- portion multiplier (tap-add picker) ----
+  function portionFor(name) {
+    return portionMap[name] || 1
+  }
+  function setPortion(name, mult) {
+    setPortionMap((m) => ({ ...m, [name]: mult }))
+  }
+
   // ---- custom food ----
   async function handleAddCustom(e) {
     e.preventDefault()
@@ -393,6 +467,28 @@ function FoodTab() {
         </div>
         <button onClick={() => setDate((d) => shiftDate(d, 1))}
           className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/60 bg-white/5 border border-white/10">›</button>
+      </div>
+
+      {/* Meal selector */}
+      <div>
+        <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Logging to</div>
+        <div className="grid grid-cols-4 gap-2">
+          {MEALS.map((m) => {
+            const active = selectedMeal === m.key
+            return (
+              <button key={m.key} onClick={() => setSelectedMeal(m.key)}
+                className="btn-press py-2.5 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5 transition-all"
+                style={{
+                  background: active ? `${COLOR}25` : 'rgba(255,255,255,0.04)',
+                  color: active ? COLOR : 'rgba(255,255,255,0.5)',
+                  border: `1px solid ${active ? COLOR + '60' : 'transparent'}`,
+                }}>
+                <span className="text-base">{m.icon}</span>
+                {m.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Macro rings */}
@@ -502,6 +598,10 @@ function FoodTab() {
           className="btn-press py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white/80">
           <span>🗂️</span> Templates
         </button>
+        <button onClick={() => setShowRecipes(true)}
+          className="btn-press col-span-2 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white/80">
+          <span>📖</span> Recipes
+        </button>
       </div>
 
       {/* Recent foods */}
@@ -557,23 +657,43 @@ function FoodTab() {
         <div className="space-y-2 max-h-80 overflow-y-auto no-scrollbar">
           {filtered.map((food, i) => {
             const q = qtyFor(food.name)
+            const portion = portionFor(food.name)
+            const eff = q * portion
             return (
-              <div key={food.name + i} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-white/85 truncate">{food.name}</div>
-                  <div className="text-[11px] text-white/40">
-                    {food.cal} cal · {food.p}p {food.c}c {food.f}f{food.serving ? ` · ${food.serving}` : ''}
+              <div key={food.name + i} className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white/85 truncate">{food.name}</div>
+                    <div className="text-[11px] text-white/40">
+                      {Math.round((Number(food.cal) || 0) * eff)} cal · {Math.round((Number(food.p) || 0) * eff)}p {Math.round((Number(food.c) || 0) * eff)}c {Math.round((Number(food.f) || 0) * eff)}f{food.serving ? ` · ${food.serving}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => bumpQty(food.name, -1)}
+                      className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">−</button>
+                    <span className="w-6 text-center text-sm font-bold text-white">{q}</span>
+                    <button onClick={() => bumpQty(food.name, 1)}
+                      className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">+</button>
+                    <button onClick={() => { addFood(food, eff); setQtyMap((m) => ({ ...m, [food.name]: 1 })); setPortion(food.name, 1) }}
+                      className="btn-press w-8 h-8 rounded-lg text-white font-bold ml-1"
+                      style={{ background: COLOR }}>+</button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => bumpQty(food.name, -1)}
-                    className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">−</button>
-                  <span className="w-6 text-center text-sm font-bold text-white">{q}</span>
-                  <button onClick={() => bumpQty(food.name, 1)}
-                    className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">+</button>
-                  <button onClick={() => { addFood(food, q); setQtyMap((m) => ({ ...m, [food.name]: 1 })) }}
-                    className="btn-press w-8 h-8 rounded-lg text-white font-bold ml-1"
-                    style={{ background: COLOR }}>+</button>
+                <div className="flex gap-1 mt-2">
+                  {PORTIONS.map((mult) => {
+                    const on = portion === mult
+                    return (
+                      <button key={mult} onClick={() => setPortion(food.name, mult)}
+                        className="btn-press flex-1 py-1 rounded-lg text-[11px] font-bold transition-all"
+                        style={{
+                          background: on ? `${COLOR}25` : 'rgba(255,255,255,0.04)',
+                          color: on ? COLOR : 'rgba(255,255,255,0.45)',
+                          border: `1px solid ${on ? COLOR + '55' : 'transparent'}`,
+                        }}>
+                        {mult}×
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -597,18 +717,33 @@ function FoodTab() {
             <p className="text-sm font-semibold">Nothing logged yet</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {items.map((it, i) => (
-              <div key={i} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-white/85 truncate">
-                    {it.qty && it.qty !== 1 ? <span className="text-white/40">{it.qty}× </span> : null}{it.name}
+          <div className="space-y-4">
+            {['breakfast', 'lunch', 'dinner', 'snack', 'other'].map((mk) => {
+              const rows = grouped[mk]
+              if (!rows.length) return null
+              const sub = sumTotals(rows.map((r) => r.it))
+              return (
+                <div key={mk}>
+                  <div className="flex items-center justify-between mb-1.5 px-1">
+                    <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: COLOR }}>{MEAL_LABEL[mk]}</span>
+                    <span className="text-[11px] font-bold text-white/40">{sub.cal} cal</span>
                   </div>
-                  <div className="text-[11px] text-white/40">{it.cal} cal · {it.p}p {it.c}c {it.f}f</div>
+                  <div className="space-y-2">
+                    {rows.map(({ it, idx }) => (
+                      <div key={idx} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                        <button onClick={() => setEditIdx(idx)} className="flex-1 min-w-0 text-left btn-press">
+                          <div className="text-sm font-bold text-white/85 truncate">
+                            {it.qty && it.qty !== 1 ? <span className="text-white/40">{it.qty}× </span> : null}{it.name}
+                          </div>
+                          <div className="text-[11px] text-white/40">{it.cal} cal · {it.p}p {it.c}c {it.f}f</div>
+                        </button>
+                        <button onClick={() => removeItem(idx)} className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button onClick={() => removeItem(i)} className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
-              </div>
-            ))}
+              )
+            })}
             <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: `${COLOR}18` }}>
               <span className="text-sm font-black text-white">Total</span>
               <span className="text-sm font-black" style={{ color: COLOR }}>
@@ -695,6 +830,25 @@ function FoodTab() {
         )}
       </Modal>
 
+      <RecipesModal
+        isOpen={showRecipes}
+        onClose={() => setShowRecipes(false)}
+        recipes={recipes}
+        allFoods={allFoods}
+        mealLabel={MEAL_LABEL[selectedMeal] || 'Other'}
+        onApply={applyRecipe}
+        onSave={saveRecipe}
+        onDelete={deleteRecipe}
+      />
+
+      <EditItemModal
+        isOpen={editIdx != null}
+        item={editIdx != null ? items[editIdx] : null}
+        onClose={() => setEditIdx(null)}
+        onSave={async (payload) => { await updateItem(editIdx, payload); setEditIdx(null) }}
+        onDelete={async () => { await removeItem(editIdx); setEditIdx(null) }}
+      />
+
       <TargetCalculatorModal
         isOpen={showTargets}
         onClose={() => setShowTargets(false)}
@@ -711,6 +865,212 @@ function Field({ label, children }) {
       <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">{label}</label>
       {children}
     </div>
+  )
+}
+
+function EditItemModal({ isOpen, item, onClose, onSave, onDelete }) {
+  const [qty, setQty] = useState(1)
+  const [meal, setMeal] = useState('other')
+
+  useEffect(() => {
+    if (item) {
+      setQty(Number(item.qty) || 1)
+      setMeal(MEAL_KEYS.includes(item.meal) ? item.meal : 'other')
+    }
+  }, [item])
+
+  if (!item) return null
+  const oldQty = Number(item.qty) || 1
+  const r = oldQty > 0 ? qty / oldQty : 1
+  const preview = {
+    cal: Math.round((Number(item.cal) || 0) * r),
+    p: Math.round((Number(item.p) || 0) * r),
+    c: Math.round((Number(item.c) || 0) * r),
+    f: Math.round((Number(item.f) || 0) * r),
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit item" accentColor={COLOR}>
+      <div className="space-y-4">
+        <div className="text-sm font-bold text-white/85">{item.name}</div>
+
+        <Field label="Quantity">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setQty((q) => Math.max(0.25, Math.round((q - 0.25) * 100) / 100))}
+              className="btn-press w-11 h-11 rounded-xl text-lg font-bold text-white/70 bg-white/5 border border-white/10">−</button>
+            <span className="flex-1 text-center text-xl font-black text-white">{qty}</span>
+            <button type="button" onClick={() => setQty((q) => Math.round((q + 0.25) * 100) / 100)}
+              className="btn-press w-11 h-11 rounded-xl text-lg font-bold text-white" style={{ background: COLOR }}>+</button>
+          </div>
+        </Field>
+
+        <Field label="Meal">
+          <div className="grid grid-cols-4 gap-2">
+            {MEALS.map((m) => {
+              const on = meal === m.key
+              return (
+                <button key={m.key} type="button" onClick={() => setMeal(m.key)}
+                  className="btn-press py-2 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5"
+                  style={{
+                    background: on ? `${COLOR}25` : 'rgba(255,255,255,0.04)',
+                    color: on ? COLOR : 'rgba(255,255,255,0.5)',
+                    border: `1px solid ${on ? COLOR + '60' : 'transparent'}`,
+                  }}>
+                  <span className="text-base">{m.icon}</span>{m.label}
+                </button>
+              )
+            })}
+          </div>
+        </Field>
+
+        <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+          <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">New macros</div>
+          <div className="text-sm font-bold" style={{ color: COLOR }}>
+            {preview.cal} cal · {preview.p}p {preview.c}c {preview.f}f
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button type="button" onClick={onDelete}
+            className="btn-press flex-1 py-3 rounded-xl font-bold text-sm text-red-400 bg-red-500/10 border border-red-500/20">
+            Delete
+          </button>
+          <button type="button" onClick={() => onSave({ qty, meal })}
+            className="btn-press flex-1 py-3 rounded-xl font-bold text-white text-sm"
+            style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 20px ${COLOR}40` }}>
+            Save
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function RecipesModal({ isOpen, onClose, recipes, allFoods, mealLabel, onApply, onSave, onDelete }) {
+  const [building, setBuilding] = useState(false)
+  const [name, setName] = useState('')
+  const [rItems, setRItems] = useState([])
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!isOpen) { setBuilding(false); setName(''); setRItems([]); setSearch('') }
+  }, [isOpen])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return allFoods.slice(0, 20)
+    return allFoods.filter((food) => {
+      if (String(food.name).toLowerCase().includes(q)) return true
+      return (food.aliases || []).some((a) => String(a).toLowerCase().includes(q))
+    }).slice(0, 30)
+  }, [search, allFoods])
+
+  const rTotals = useMemo(() => sumTotals(rItems), [rItems])
+
+  function addBuilderFood(food) {
+    setRItems((prev) => [...prev, {
+      name: food.name,
+      cal: Math.round(Number(food.cal) || 0),
+      p: Math.round(Number(food.p) || 0),
+      c: Math.round(Number(food.c) || 0),
+      f: Math.round(Number(food.f) || 0),
+      qty: 1,
+    }])
+  }
+  function save() {
+    if (!name.trim() || !rItems.length) return
+    onSave({ name: name.trim(), items: rItems, totals: rTotals })
+    setBuilding(false); setName(''); setRItems([]); setSearch('')
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Recipes" accentColor={COLOR}>
+      {!building ? (
+        <div className="space-y-3">
+          <button onClick={() => setBuilding(true)}
+            className="btn-press w-full py-3 rounded-xl font-bold text-white text-sm"
+            style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 20px ${COLOR}40` }}>
+            + Build new recipe
+          </button>
+          {(!recipes || recipes.length === 0) ? (
+            <p className="text-sm text-white/50 py-4 text-center">No recipes yet. Build one to reuse a set of foods in one tap.</p>
+          ) : (
+            <div className="space-y-2">
+              {recipes.map((rec) => {
+                const t = rec.totals || sumTotals(rec.items)
+                return (
+                  <div key={rec.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-white/85 truncate">{rec.name}</div>
+                      <div className="text-[11px] text-white/40">{(rec.items || []).length} items · {t.cal} cal</div>
+                    </div>
+                    <button onClick={() => onDelete(rec.id)}
+                      className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0 px-1">✕</button>
+                    <button onClick={() => onApply(rec)}
+                      className="btn-press px-3 py-2 rounded-lg text-sm font-bold text-white" style={{ background: COLOR }}>
+                      Add to {mealLabel}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Field label="Recipe name">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Chicken & rice bowl"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED]" />
+          </Field>
+
+          {rItems.length > 0 && (
+            <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.04] border border-white/10">
+              {rItems.map((it, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-white/80 truncate">{it.name}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-white/40 text-xs">{it.cal} cal</span>
+                    <button onClick={() => setRItems((prev) => prev.filter((_, x) => x !== i))}
+                      className="text-white/20 hover:text-red-400">✕</button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/10 text-sm">
+                <span className="font-bold text-white">Total</span>
+                <span className="font-bold" style={{ color: COLOR }}>{rTotals.cal} cal · {rTotals.p}p {rTotals.c}c {rTotals.f}f</span>
+              </div>
+            </div>
+          )}
+
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search foods to add…"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED]" />
+          <div className="space-y-2 max-h-56 overflow-y-auto no-scrollbar">
+            {filtered.map((food, i) => (
+              <button key={food.name + i} onClick={() => addBuilderFood(food)}
+                className="btn-press w-full flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-left">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white/85 truncate">{food.name}</div>
+                  <div className="text-[11px] text-white/40">{food.cal} cal · {food.p}p {food.c}c {food.f}f</div>
+                </div>
+                <span className="text-lg font-bold flex-shrink-0" style={{ color: COLOR }}>+</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={() => setBuilding(false)}
+              className="btn-press flex-1 py-3 rounded-xl text-sm font-semibold text-white/50 bg-white/5 border border-white/10">
+              Cancel
+            </button>
+            <button onClick={save} disabled={!name.trim() || !rItems.length}
+              className="btn-press flex-1 py-3 rounded-xl font-bold text-white text-sm disabled:opacity-40"
+              style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 20px ${COLOR}40` }}>
+              Save recipe
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }
 
