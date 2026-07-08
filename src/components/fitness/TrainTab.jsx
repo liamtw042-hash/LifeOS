@@ -4,6 +4,7 @@ import Card from '../Card'
 import Modal from '../Modal'
 import LoadingSpinner from '../LoadingSpinner'
 import RestTimer from './RestTimer'
+import { LineChart, BarChart } from '../charts/Charts'
 import {
   SPLIT,
   WORKOUTS,
@@ -688,8 +689,32 @@ function ExerciseHistoryView({ name, history }) {
       </div>
     )
   }
+  // Series ascending by date for charts.
+  const asc = [...rows].reverse()
+  const oneRMSeries = asc.map((row) => {
+    const best = bestSet(row.sets)
+    return { label: (row.date || '').slice(5).replace('-', '/'), value: epley1RM(best?.weight, best?.reps) }
+  })
+  const volumeSeries = asc.map((row) => {
+    const vol = (row.sets || []).reduce((a, s) => a + (Number(s.weight) || 0) * (Number(s.reps) || 0), 0)
+    return { label: (row.date || '').slice(5).replace('-', '/'), value: Math.round(vol) }
+  })
+  const hasChart = oneRMSeries.some((p) => p.value > 0)
+
   return (
     <div className="space-y-2">
+      {hasChart && (
+        <div className="space-y-3 mb-2">
+          <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+            <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">Estimated 1RM</div>
+            <LineChart data={oneRMSeries} color={COLOR} height={120} yLabel="kg" />
+          </div>
+          <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
+            <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1">Volume / session</div>
+            <BarChart data={volumeSeries} color={COLOR} height={120} />
+          </div>
+        </div>
+      )}
       {rows.map((row, i) => {
         const best = bestSet(row.sets)
         return (

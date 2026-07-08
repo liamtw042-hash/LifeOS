@@ -4,9 +4,28 @@ import Card from '../Card'
 import Modal from '../Modal'
 import LoadingSpinner from '../LoadingSpinner'
 import { generateCoachInsights } from '../../lib/coach'
+import { BarChart, LineChart } from '../charts/Charts'
 
 const COLOR = '#7C3AED'
 const TONE = { good: '#10B981', warn: '#F97316', info: '#7C3AED' }
+const DEFAULT_TARGETS = { calories: 2200, protein: 150 }
+
+function localKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function lastNDayKeys(n) {
+  const out = []
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(base)
+    d.setDate(d.getDate() - i)
+    out.push(localKey(d))
+  }
+  return out
+}
+const sumField = (items, field) =>
+  (items || []).reduce((a, it) => a + (Number(it[field]) || 0), 0)
 
 const todayStr = () => {
   const d = new Date()
@@ -74,6 +93,7 @@ export default function ProgressTab() {
   const [compareMode, setCompareMode] = useState(false)
   const [picked, setPicked] = useState([]) // photo ids
   const [viewPhoto, setViewPhoto] = useState(null)
+  const [nutRange, setNutRange] = useState(7)
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -128,6 +148,26 @@ export default function ProgressTab() {
     }),
     [todayFoodLog, targets, sessions, weightLogs, habits, today]
   )
+
+  // ---- nutrition trends ----
+  const nutTargets = useMemo(() => {
+    const p = (profiles || [])[0]
+    return {
+      calories: (p && p.calories) || DEFAULT_TARGETS.calories,
+      protein: (p && p.protein) || DEFAULT_TARGETS.protein,
+    }
+  }, [profiles])
+
+  const nutrition = useMemo(() => {
+    const byDate = {}
+    for (const log of foodLogs || []) byDate[log.date] = log
+    const keys = lastNDayKeys(nutRange)
+    const fmt = (k) => k.slice(5).replace('-', '/')
+    const cals = keys.map((k) => ({ label: fmt(k), value: byDate[k] ? Math.round(sumField(byDate[k].items, 'cal')) : 0 }))
+    const prot = keys.map((k) => ({ label: fmt(k), value: byDate[k] ? Math.round(sumField(byDate[k].items, 'p')) : 0 }))
+    const logged = keys.filter((k) => byDate[k] && (byDate[k].items || []).length).length
+    return { cals, prot, logged }
+  }, [foodLogs, nutRange])
 
   // ---- handlers ----
   async function handleAddWeight(e) {
@@ -238,6 +278,42 @@ export default function ProgressTab() {
           </div>
         </Card>
       )}
+
+      {/* ---- Nutrition trends ---- */}
+      <Card accentColor={COLOR} className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold text-white/40 uppercase tracking-widest">🍽 Nutrition Trends</div>
+          <div className="flex gap-1">
+            {[7, 30].map((n) => (
+              <button
+                key={n}
+                onClick={() => setNutRange(n)}
+                className="btn-press text-[11px] font-bold px-2.5 py-1 rounded-full transition-all"
+                style={{
+                  color: nutRange === n ? '#fff' : COLOR,
+                  background: nutRange === n ? COLOR : 'transparent',
+                  border: `1px solid ${COLOR}40`,
+                }}
+              >
+                {n}d
+              </button>
+            ))}
+          </div>
+        </div>
+        {nutrition.logged === 0 ? (
+          <div className="text-center py-6 text-white/30">
+            <div className="text-3xl mb-1">🍽</div>
+            <p className="text-sm font-semibold">No food logged yet</p>
+          </div>
+        ) : (
+          <>
+            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Calories / day · target {nutTargets.calories}</div>
+            <BarChart data={nutrition.cals} color={COLOR} target={nutTargets.calories} height={130} />
+            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1 mt-3">Protein / day · target {nutTargets.protein}g</div>
+            <LineChart data={nutrition.prot} color={COLOR} target={nutTargets.protein} height={130} yLabel="g" />
+          </>
+        )}
+      </Card>
 
       {/* ---- Progress photos ---- */}
       <Card accentColor={COLOR} className="p-4">
