@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useFirestore } from '../hooks/useFirestore'
 import Card from '../components/Card'
 import Modal from '../components/Modal'
@@ -25,11 +25,14 @@ const ACTIVITY_LABELS = {
 }
 const GOAL_LABELS = { cut: 'Cut', maintain: 'Maintain', bulk: 'Bulk' }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+function localKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const todayStr = () => localKey(new Date())
 function shiftDate(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00')
   d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  return localKey(d)
 }
 function prettyDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
@@ -116,6 +119,7 @@ function FoodTab() {
   const [search, setSearch] = useState('')
   const [qtyMap, setQtyMap] = useState({})
   const [listening, setListening] = useState(false)
+  const recRef = useRef(null)
   const [showScanner, setShowScanner] = useState(false)
   const [showCustom, setShowCustom] = useState(false)
   const [showTargets, setShowTargets] = useState(false)
@@ -206,14 +210,33 @@ function FoodTab() {
     : null
   function startVoice() {
     if (!SpeechRec) return
+    // If already listening, tapping the mic stops the current recognizer.
+    if (listening && recRef.current) {
+      try { recRef.current.stop() } catch (e) { /* ignore */ }
+      return
+    }
     try {
       const rec = new SpeechRec()
+      recRef.current = rec
       rec.lang = 'en-AU'
       rec.interimResults = false
       rec.maxAlternatives = 1
       rec.onresult = (e) => {
         const transcript = e.results?.[0]?.[0]?.transcript || ''
+        if (!transcript) return
         setNlText((prev) => (prev ? prev + ' ' + transcript : transcript))
+        // Parse the transcript directly — handleParse() would close over stale nlText.
+        const inline = parseInlineMacros(transcript)
+        if (inline) {
+          setPreview({
+            items: [{ ...inline, qty: 1 }],
+            totals: { cal: inline.cal, p: inline.p, c: inline.c, f: inline.f },
+            unmatched: [],
+            custom: true,
+          })
+        } else {
+          setPreview(parseFoodText(transcript, allFoods))
+        }
       }
       rec.onend = () => setListening(false)
       rec.onerror = () => setListening(false)
@@ -223,6 +246,13 @@ function FoodTab() {
       setListening(false)
     }
   }
+
+  // Cleanup any active recognizer on unmount.
+  useEffect(() => {
+    return () => {
+      try { recRef.current?.abort() } catch (e) { /* ignore */ }
+    }
+  }, [])
 
   // ---- picker ----
   const filtered = useMemo(() => {

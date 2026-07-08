@@ -5,9 +5,7 @@ import GradientBackground from './GradientBackground'
 
 const SECTION_MAP = {
   '/': 'dashboard',
-  '/money': 'money',
   '/fitness': 'fitness',
-  '/projects': 'projects',
   '/journal': 'journal',
   '/school': 'school',
 }

@@ -148,7 +148,6 @@ export async function queryDocs(collection, userId, idToken) {
           value: { stringValue: userId },
         },
       },
-      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
       limit: 200,
     },
   }

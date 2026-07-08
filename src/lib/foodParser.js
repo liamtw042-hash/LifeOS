@@ -48,6 +48,15 @@ export function parseInlineMacros(text) {
     // Require at least one explicit macro token to treat this as inline macros.
     if (!calM && !proM && !carbM && !fatM) return null
 
+    // Guard against hijacking normal food text like "2 c rice" or "5 fat guys".
+    // Only treat as inline macros when it's *clearly* macros: an explicit
+    // calorie token, a gram-qualified macro (e.g. "20g protein"), or at least
+    // two distinct macro tokens.
+    const hasCal = !!calM
+    const hasGramMacro = /\d+(?:\.\d+)?\s*g\s*(?:protein|prot|carbs?|carbohydrates?|fat|\bp\b|\bc\b|\bf\b)/.test(lower)
+    const distinctCount = [proM, carbM, fatM, calM].filter(Boolean).length
+    if (!hasCal && !hasGramMacro && distinctCount < 2) return null
+
     const cal = calM ? round(parseFloat(calM[1])) : 0
     const p = proM ? round(parseFloat(proM[1])) : 0
     const c = carbM ? round(parseFloat(carbM[1])) : 0

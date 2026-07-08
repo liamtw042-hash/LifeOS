@@ -8,7 +8,14 @@ function mapProduct(product) {
   const n = product.nutriments || {}
   const perServing = n['energy-kcal_serving']
   const per100 = n['energy-kcal_100g']
-  const useServing = perServing != null && perServing !== ''
+  const has = (key) => n[key] != null && n[key] !== ''
+  // Use per-serving values only when ALL four fields have a _serving value,
+  // otherwise fall back to per-100g for everything (never mix bases).
+  const useServing =
+    has('energy-kcal_serving') &&
+    has('proteins_serving') &&
+    has('carbohydrates_serving') &&
+    has('fat_serving')
   const pick = (base) => {
     const s = n[`${base}_serving`]
     const h = n[`${base}_100g`]
