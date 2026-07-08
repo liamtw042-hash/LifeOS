@@ -153,16 +153,36 @@ function FoodTab() {
     : DEFAULT_TARGETS
 
   // ---- persistence helpers ----
+  // Serializes writes for the current day so two quick adds on a brand-new day
+  // don't both create/PATCH — the second waits for the first create's real id.
+  const pendingCreateRef = useRef(null)
   async function persistDay(nextItems, nextWater) {
     const existing = (foodLogs || []).find((d) => d.date === date)
-    const payload = { date, items: nextItems, water: nextWater }
-    if (existing) {
+    // Existing real doc — patch directly.
+    if (existing && !String(existing.id).startsWith('temp_')) {
       await updateLog(existing.id, { items: nextItems, water: nextWater })
-    } else {
-      await addLog(payload)
+      return
+    }
+    // A create is already in flight for this day (optimistic temp doc present) —
+    // wait for the real saved id, then update that instead of PATCHing temp_.
+    if (pendingCreateRef.current) {
+      const saved = await pendingCreateRef.current
+      if (saved?.id) {
+        await updateLog(saved.id, { items: nextItems, water: nextWater })
+        return
+      }
+    }
+    // No doc yet — create one and remember the in-flight promise.
+    const payload = { date, items: nextItems, water: nextWater }
+    const p = addLog(payload)
+    pendingCreateRef.current = p
+    try {
+      await p
+    } finally {
+      if (pendingCreateRef.current === p) pendingCreateRef.current = null
     }
   }
-  function addItems(newItems) {
+  async function addItems(newItems) {
     const cleaned = (newItems || []).map((it) => ({
       name: String(it.name || 'Food'),
       cal: Math.round(Number(it.cal) || 0),
@@ -172,13 +192,13 @@ function FoodTab() {
       qty: Number(it.qty) || 1,
     }))
     if (!cleaned.length) return
-    persistDay([...items, ...cleaned], water)
+    await persistDay([...items, ...cleaned], water)
   }
-  function removeItem(idx) {
-    persistDay(items.filter((_, i) => i !== idx), water)
+  async function removeItem(idx) {
+    await persistDay(items.filter((_, i) => i !== idx), water)
   }
-  function changeWater(delta) {
-    persistDay(items, Math.max(0, water + delta))
+  async function changeWater(delta) {
+    await persistDay(items, Math.max(0, water + delta))
   }
 
   // ---- natural language + inline macros ----

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
@@ -7,10 +7,32 @@ import Dashboard from './pages/Dashboard'
 import Fitness from './pages/Fitness'
 import Journal from './pages/Journal'
 import School from './pages/School'
+import Settings from './pages/Settings'
 import LoadingSpinner from './components/LoadingSpinner'
+import { useFirestore } from './hooks/useFirestore'
+import { startScheduler, defaultReminders } from './lib/reminders'
+
+// Runs the reminder scheduler while logged in, reading the latest settings doc.
+function useReminderScheduler() {
+  const { docs: settingsDocs, fetchDocs } = useFirestore('settings')
+  const remindersRef = useRef(defaultReminders())
+
+  useEffect(() => { fetchDocs() }, [fetchDocs])
+
+  useEffect(() => {
+    const doc = (settingsDocs || [])[0]
+    remindersRef.current = { ...defaultReminders(), ...(doc?.reminders || {}) }
+  }, [settingsDocs])
+
+  useEffect(() => {
+    const stop = startScheduler(() => remindersRef.current)
+    return stop
+  }, [])
+}
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth()
+  useReminderScheduler()
 
   if (loading) {
     return (
@@ -29,6 +51,7 @@ function ProtectedRoutes() {
         <Route path="/fitness" element={<Fitness />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/school" element={<School />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

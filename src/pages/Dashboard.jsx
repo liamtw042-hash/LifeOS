@@ -256,12 +256,21 @@ export default function Dashboard() {
             {getGreeting()},<br />{name} 👋
           </h1>
         </div>
-        <button
-          onClick={logout}
-          className="btn-press mt-1 text-white/30 hover:text-white/60 transition-colors text-sm font-medium"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-2 mt-1">
+          <button
+            onClick={() => navigate('/settings')}
+            className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
+          <button
+            onClick={logout}
+            className="btn-press text-white/30 hover:text-white/60 transition-colors text-sm font-medium"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}
