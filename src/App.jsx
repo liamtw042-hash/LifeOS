@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Auth from './pages/Auth'
 import Dashboard from './pages/Dashboard'
 import Fitness from './pages/Fitness'
+import Review from './pages/Review'
 import Journal from './pages/Journal'
 import School from './pages/School'
 import Settings from './pages/Settings'
@@ -49,6 +50,7 @@ function ProtectedRoutes() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/fitness" element={<Fitness />} />
+        <Route path="/review" element={<Review />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/school" element={<School />} />
         <Route path="/settings" element={<Settings />} />
