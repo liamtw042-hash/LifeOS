@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import MacroRings from '../components/fitness/MacroRings'
 import BarcodeScanner from '../components/fitness/BarcodeScanner'
 import TrainTab from '../components/fitness/TrainTab'
+import ProgressTab from '../components/fitness/ProgressTab'
 import { FOODS } from '../data/foods'
 import { parseInlineMacros, parseFoodText } from '../lib/foodParser'
 import { calcTargets, ACTIVITY_LEVELS } from '../lib/nutrition'
@@ -758,117 +759,5 @@ function TargetCalculatorModal({ isOpen, onClose, profile, onSave }) {
         </button>
       </form>
     </Modal>
-  )
-}
-
-/* ============================= PROGRESS TAB ============================= */
-
-function ProgressTab() {
-  const { docs: weightLogs, loading, fetchDocs, addDocument, deleteDocument } = useFirestore('weights')
-  const [showModal, setShowModal] = useState(false)
-  const [wtForm, setWtForm] = useState({ value: '', date: todayStr() })
-
-  useEffect(() => { fetchDocs() }, [fetchDocs])
-
-  async function handleAdd(e) {
-    e.preventDefault()
-    if (!wtForm.value) return
-    await addDocument({ value: Number(wtForm.value), date: wtForm.date })
-    setWtForm({ value: '', date: todayStr() })
-    setShowModal(false)
-  }
-
-  const sorted = [...weightLogs].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-  const last5 = sorted.slice(-5)
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-white/40 text-sm">{weightLogs.length} weigh-ins</p>
-        <button onClick={() => setShowModal(true)}
-          className="btn-press h-10 px-4 rounded-full text-sm font-bold text-white flex items-center gap-1"
-          style={{ background: COLOR, boxShadow: `0 0 20px ${COLOR}60` }}>⚖️ Log</button>
-      </div>
-
-      {loading && <div className="flex justify-center py-8"><LoadingSpinner color={COLOR} size={32} /></div>}
-
-      {last5.length > 0 && (
-        <Card accentColor={COLOR} className="p-4">
-          <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Weight Trend</div>
-          <div className="flex items-end gap-2 h-16">
-            {last5.map((w, i) => {
-              const vals = last5.map((x) => x.value)
-              const min = Math.min(...vals)
-              const max = Math.max(...vals)
-              const range = max - min || 1
-              const pct = ((w.value - min) / range) * 60 + 16
-              const isLast = i === last5.length - 1
-              return (
-                <div key={w.id} className="flex flex-col items-center gap-1 flex-1">
-                  <span className="text-[9px] text-white/40">{w.value}kg</span>
-                  <div className="w-full rounded-t-lg transition-all duration-500"
-                    style={{ height: `${pct}px`, background: isLast ? COLOR : `${COLOR}40`, boxShadow: isLast ? `0 0 8px ${COLOR}80` : 'none' }} />
-                  <span className="text-[9px] text-white/25">{w.date?.slice(5)}</span>
-                </div>
-              )
-            })}
-          </div>
-          {last5.length >= 2 && (() => {
-            const diff = (last5[last5.length - 1].value - last5[0].value).toFixed(1)
-            return (
-              <p className="text-xs mt-2" style={{ color: Number(diff) <= 0 ? '#10B981' : '#EF4444' }}>
-                {Number(diff) > 0 ? `+${diff}` : diff}kg over last {last5.length} entries
-              </p>
-            )
-          })()}
-        </Card>
-      )}
-
-      <div className="space-y-2">
-        {[...weightLogs].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((w) => (
-          <div key={w.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
-            <div className="flex-1">
-              <span className="font-black text-sm" style={{ color: COLOR }}>{w.value}kg</span>
-              <span className="text-xs text-white/30 ml-2">{w.date}</span>
-            </div>
-            <button onClick={() => deleteDocument(w.id)} className="text-white/15 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
-          </div>
-        ))}
-        {!loading && weightLogs.length === 0 && (
-          <div className="text-center py-16 text-white/30">
-            <div className="text-5xl mb-3">⚖️</div>
-            <p className="font-semibold">Log your first weigh-in</p>
-          </div>
-        )}
-      </div>
-
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Log Weight" accentColor={COLOR}>
-        <form onSubmit={handleAdd} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Weight (kg)</label>
-            <input type="number" step="0.1" value={wtForm.value} onChange={(e) => setWtForm((f) => ({ ...f, value: e.target.value }))} required
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:border-[#7C3AED] transition-colors"
-              placeholder="75.0" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">Date</label>
-            <input type="date" value={wtForm.date} onChange={(e) => setWtForm((f) => ({ ...f, date: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-[#7C3AED] transition-colors" />
-          </div>
-          <div className="flex gap-2">
-            {weightLogs.slice(-3).reverse().map((w) => (
-              <div key={w.id} className="flex-1 text-center glass-card py-2 rounded-xl">
-                <div className="font-black text-sm" style={{ color: COLOR }}>{w.value}kg</div>
-                <div className="text-[9px] text-white/30 mt-0.5">{w.date?.slice(5)}</div>
-              </div>
-            ))}
-          </div>
-          <button type="submit" className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
-            style={{ background: `linear-gradient(135deg, ${COLOR}, #6D28D9)`, boxShadow: `0 0 30px ${COLOR}50` }}>
-            Save Weight
-          </button>
-        </form>
-      </Modal>
-    </div>
   )
 }
