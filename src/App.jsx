@@ -8,6 +8,7 @@ import Fitness from './pages/Fitness'
 import Review from './pages/Review'
 import Journal from './pages/Journal'
 import School from './pages/School'
+import Wellness from './pages/Wellness'
 import Settings from './pages/Settings'
 import LoadingSpinner from './components/LoadingSpinner'
 import { useFirestore } from './hooks/useFirestore'
@@ -53,6 +54,7 @@ function ProtectedRoutes() {
         <Route path="/review" element={<Review />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/school" element={<School />} />
+        <Route path="/wellness" element={<Wellness />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
