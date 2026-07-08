@@ -62,6 +62,7 @@ export function isPR(name, weight, reps, history, requirePrior = false) {
     for (const ex of session.exercises || []) {
       if (ex.name !== name) continue
       for (const s of ex.sets || []) {
+        if (s.warmup) continue
         const est = epley1RM(s.weight, s.reps)
         if (est > 0) {
           seen = true
@@ -75,10 +76,12 @@ export function isPR(name, weight, reps, history, requirePrior = false) {
 }
 
 // Total volume = sum(weight * reps) across every set of every exercise.
+// Warmup sets (s.warmup === true) never count toward volume.
 export function estimateVolume(exercises) {
   let total = 0
   for (const ex of exercises || []) {
     for (const s of ex.sets || []) {
+      if (s.warmup) continue
       const w = Number(s.weight) || 0
       const r = Number(s.reps) || 0
       total += w * r
@@ -87,12 +90,67 @@ export function estimateVolume(exercises) {
   return Math.round(total)
 }
 
+// Standard kg plates available per side, heaviest first.
+export const KG_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25]
+
+// Plate loading for a barbell: how to load ONE side to reach `target` total.
+// Returns { perSide:[{plate,count}], loadedTotal, leftover, bar }.
+export function plateBreakdown(target, bar = 20, plates = KG_PLATES) {
+  const t = Number(target) || 0
+  const b = Number(bar) || 0
+  const perSideWeight = (t - b) / 2
+  const out = { perSide: [], loadedTotal: b, leftover: 0, bar: b }
+  if (perSideWeight <= 0) {
+    out.leftover = t > 0 && t < b ? t : 0
+    return out
+  }
+  let remaining = perSideWeight
+  for (const p of plates) {
+    let count = 0
+    while (remaining >= p - 1e-9) {
+      remaining -= p
+      count += 1
+    }
+    if (count > 0) out.perSide.push({ plate: p, count })
+  }
+  const loadedPerSide = perSideWeight - remaining
+  out.loadedTotal = Math.round((b + loadedPerSide * 2) * 100) / 100
+  out.leftover = Math.round(remaining * 2 * 100) / 100 // total weight still short
+  return out
+}
+
+// Warmup ramp for a given working weight. Returns tappable warmup set rows.
+// Percentages scale up to the work set; empty-bar / light first set included.
+export function warmupSets(workingWeight, type = 'compound') {
+  const w = Number(workingWeight) || 0
+  if (w <= 0) return []
+  const steps =
+    type === 'compound'
+      ? [
+          { pct: 0, reps: 10, label: 'Bar' },
+          { pct: 40, reps: 8 },
+          { pct: 60, reps: 5 },
+          { pct: 80, reps: 3 },
+        ]
+      : [
+          { pct: 50, reps: 12 },
+          { pct: 75, reps: 8 },
+        ]
+  return steps.map((s) => ({
+    weight: s.pct === 0 ? 0 : Math.round((w * s.pct) / 100 / 0.5) * 0.5,
+    reps: s.reps,
+    pct: s.pct,
+    label: s.label || `${s.pct}%`,
+  }))
+}
+
 // Best estimated 1RM per exercise across all history — for the PR board.
 export function personalRecords(history) {
   const map = {}
   for (const session of history || []) {
     for (const ex of session.exercises || []) {
       for (const s of ex.sets || []) {
+        if (s.warmup) continue
         const est = epley1RM(s.weight, s.reps)
         if (est <= 0) continue
         const prev = map[ex.name]

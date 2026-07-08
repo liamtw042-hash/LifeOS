@@ -303,3 +303,22 @@ export const BODYWEIGHT = [
 export function restSeconds(type) {
   return type === 'compound' ? 120 : 60
 }
+
+// Flat, de-duplicated list of every exercise across all workouts + bodyweight,
+// for the custom workout builder's picker. Keeps the first-seen definition.
+export const ALL_EXERCISES = (() => {
+  const seen = new Map()
+  const push = (ex) => {
+    if (ex && ex.name && !seen.has(ex.name)) {
+      seen.set(ex.name, {
+        name: ex.name,
+        muscle: ex.muscle || '',
+        type: ex.type || 'compound',
+        repRange: ex.repRange || [8, 12],
+      })
+    }
+  }
+  Object.values(WORKOUTS).forEach((arr) => (arr || []).forEach(push))
+  BODYWEIGHT.forEach(push)
+  return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
+})()
