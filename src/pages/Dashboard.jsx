@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import { SPLIT, DAY_ORDER } from '../data/trainingProgram'
 import { todayDayKey } from '../lib/training'
 import { computeAchievements } from '../lib/achievements'
+import { formatWeight, toKg, fromKg } from '../lib/units'
 import GlobalSearch from '../components/GlobalSearch'
 
 const FITNESS = '#7C3AED'
@@ -157,12 +158,18 @@ export default function Dashboard() {
     docs: dailyGoals, fetchDocs: fetchDaily, addDocument: addDaily, updateDocument: updateDaily,
   } = useFirestore('dailyGoals')
   const { docs: sessions, fetchDocs: fetchSessions } = useFirestore('workoutSessions')
-  const { docs: weights, fetchDocs: fetchWeights } = useFirestore('weights')
+  const {
+    docs: weights, fetchDocs: fetchWeights,
+    addDocument: addWeight, updateDocument: updateWeight,
+  } = useFirestore('weights')
   const { docs: journal, fetchDocs: fetchJournal } = useFirestore('journal')
   const { docs: foodLog, fetchDocs: fetchFood } = useFirestore('foodLog')
   const { docs: settingsDocs, fetchDocs: fetchSettings } = useFirestore('settings')
+  const { docs: fitProfiles, fetchDocs: fetchFitProfile } = useFirestore('fitnessProfile')
   const [time, setTime] = useState(new Date())
   const [searchOpen, setSearchOpen] = useState(false)
+  const [showWeight, setShowWeight] = useState(false)
+  const [weightInput, setWeightInput] = useState('')
 
   useEffect(() => {
     fetchHabits()
@@ -173,12 +180,43 @@ export default function Dashboard() {
     fetchJournal()
     fetchFood()
     fetchSettings()
+    fetchFitProfile()
     const timer = setInterval(() => setTime(new Date()), 60000)
     return () => clearInterval(timer)
-  }, [fetchHabits, fetchGoals, fetchDaily, fetchSessions, fetchWeights, fetchJournal, fetchFood, fetchSettings])
+  }, [fetchHabits, fetchGoals, fetchDaily, fetchSessions, fetchWeights, fetchJournal, fetchFood, fetchSettings, fetchFitProfile])
 
   const today = todayStr()
   const tomorrow = shiftDate(today, 1)
+
+  // ---- Bodyweight (surfaced on the home screen for easy logging) ----
+  const units = (settingsDocs || [])[0]?.units === 'lb' ? 'lb' : 'kg'
+  const sortedWeights = useMemo(
+    () => [...(weights || [])].sort((a, b) => (a.date || '').localeCompare(b.date || '')),
+    [weights]
+  )
+  const latestWeight = sortedWeights.length ? sortedWeights[sortedWeights.length - 1] : null
+  const goalWeightKg = Number((fitProfiles || [])[0]?.goalWeight) > 0
+    ? Number((fitProfiles || [])[0].goalWeight)
+    : null
+
+  function openWeightModal() {
+    // Pre-fill with the most recent weight (in display units) for a one-tap tweak.
+    setWeightInput(latestWeight ? String(Number(fromKg(latestWeight.value, units).toFixed(1))) : '')
+    setShowWeight(true)
+  }
+  async function saveWeight(e) {
+    if (e) e.preventDefault()
+    const v = parseFloat(weightInput)
+    if (!v || v <= 0) return
+    const kg = Number(toKg(v, units).toFixed(2))
+    // Upsert today's weigh-in: one entry per day.
+    const existing = (weights || []).find((w) => w.date === today && !String(w.id).startsWith('temp_'))
+    if (existing) await updateWeight(existing.id, { value: kg })
+    else await addWeight({ date: today, value: kg })
+    setShowWeight(false)
+    setWeightInput('')
+    fetchWeights()
+  }
   const habitsToday = habits.filter(h => (h.completions || []).includes(today))
   const activeGoals = goals.filter(g => (g.progress || 0) < 100)
 
@@ -375,6 +413,39 @@ export default function Dashboard() {
           <div className="text-xs text-white/40 font-semibold mt-0.5 uppercase tracking-wider">Streak</div>
         </Card>
       </div>
+
+      {/* ---- Weight: log bodyweight straight from home ---- */}
+      <Card accentColor="#10B981" className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+              <span>⚖️</span> Weight
+            </div>
+            {latestWeight ? (
+              <>
+                <div className="text-3xl font-black text-white mt-1 leading-none">
+                  {formatWeight(latestWeight.value, units)}
+                </div>
+                <div className="text-xs text-white/40 mt-1">
+                  {latestWeight.date === today ? "Today's weight" : `Last logged ${latestWeight.date}`}
+                  {goalWeightKg != null && (
+                    <> · goal {formatWeight(goalWeightKg, units)}</>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-white/50 mt-1">No weigh-ins yet — add your first below.</div>
+            )}
+          </div>
+          <button
+            onClick={openWeightModal}
+            className="btn-press flex-shrink-0 px-4 py-3 rounded-xl font-bold text-white text-sm"
+            style={{ background: '#10B981', boxShadow: '0 0 20px #10B98155' }}
+          >
+            ＋ Log weight
+          </button>
+        </div>
+      </Card>
 
       {/* Time display */}
       <Card className="py-5 text-center" accentColor="#7C3AED">
@@ -755,6 +826,33 @@ export default function Dashboard() {
 
       {/* ---- Global search ---- */}
       <GlobalSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {/* ---- Log Weight modal ---- */}
+      <Modal isOpen={showWeight} onClose={() => setShowWeight(false)} title="Log today's weight" accentColor="#10B981">
+        <form onSubmit={saveWeight} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-white/40 mb-1.5 uppercase tracking-widest">
+              Weight ({units})
+            </label>
+            <input
+              type="number" step="0.1" inputMode="decimal" autoFocus
+              value={weightInput}
+              onChange={(e) => setWeightInput(e.target.value)}
+              required
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-2xl font-black text-center focus:border-[#10B981] outline-none"
+              placeholder={units === 'lb' ? '165.0' : '53.8'}
+            />
+            <div className="text-xs text-white/30 mt-1.5 text-center">Logs for today ({today}). Shows in your weight trend.</div>
+          </div>
+          <button
+            type="submit"
+            className="btn-press w-full py-3.5 rounded-xl font-bold text-white text-sm"
+            style={{ background: '#10B981', boxShadow: '0 0 24px #10B98155' }}
+          >
+            Save weight
+          </button>
+        </form>
+      </Modal>
 
       {/* ---- Add Habit modal ---- */}
       <Modal isOpen={habitModal} onClose={() => setHabitModal(false)} title="New Habit" accentColor={CYAN}>
