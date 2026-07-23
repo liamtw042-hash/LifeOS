@@ -17,8 +17,8 @@ export default function Card({ children, className = '', accentColor, onClick, h
       onMouseEnter={
         hover && accentColor
           ? (e) => {
-              e.currentTarget.style.boxShadow = `0 0 20px ${accentColor}33`
-              e.currentTarget.style.borderColor = `${accentColor}50`
+              e.currentTarget.style.boxShadow = `0 12px 34px rgba(0,0,0,0.5), 0 0 26px ${accentColor}40, inset 0 1px 0 rgba(255,255,255,0.08)`
+              e.currentTarget.style.borderColor = `${accentColor}66`
             }
           : undefined
       }

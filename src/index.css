@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   LifeOS — "JARVIS" HUD design tokens
+   ============================================================ */
+:root {
+  --bg: #05060A;
+  --panel: rgba(255, 255, 255, 0.035);
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #7C3AED;
+  --accent-2: #22D3EE;
+  --accent-rgb: 124, 58, 237;
+  --accent-2-rgb: 34, 211, 238;
+
+  /* glow shadow vars */
+  --glow-accent: 0 0 20px rgba(124, 58, 237, 0.35);
+  --glow-accent-2: 0 0 20px rgba(34, 211, 238, 0.32);
+  --glow-soft: 0 0 24px rgba(124, 58, 237, 0.14);
+  --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
@@ -9,7 +29,7 @@
   }
 
   html, body {
-    background-color: #000000;
+    background-color: var(--bg);
     color: #ffffff;
     font-family: 'Inter', sans-serif;
     letter-spacing: -0.02em;
@@ -18,6 +38,18 @@
 
   body {
     overflow-x: hidden;
+    /* HUD backdrop: subtle violet/cyan radial depth + faint hairline grid.
+       Cheap (pure CSS gradients), fixed so it doesn't repaint on scroll. */
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(1100px 720px at 12% -10%, rgba(124, 58, 237, 0.10), transparent 60%),
+      radial-gradient(900px 620px at 102% 6%, rgba(34, 211, 238, 0.07), transparent 55%),
+      radial-gradient(1000px 900px at 50% 116%, rgba(124, 58, 237, 0.06), transparent 62%),
+      linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat;
+    background-attachment: fixed;
   }
 
   ::-webkit-scrollbar {
@@ -35,12 +67,20 @@
 }
 
 @layer components {
-  .glass-card {
-    background: rgba(10, 10, 10, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+  /* ---- HUD glass panel (also upgrades every .glass-card usage) ---- */
+  .glass-card,
+  .hud-panel {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.014) 42%, rgba(255, 255, 255, 0.008)),
+      rgba(12, 14, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(1.15);
+    -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    border: 1px solid var(--line);
     border-radius: 16px;
+    box-shadow:
+      var(--panel-shadow),
+      var(--glow-soft),
+      var(--panel-inset);
   }
 
   .glass-card-hover {
@@ -49,6 +89,11 @@
 
   .glass-card-hover:hover {
     transform: scale(1.01);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      0 12px 34px rgba(0, 0, 0, 0.5),
+      0 0 22px rgba(124, 58, 237, 0.12),
+      var(--panel-inset);
   }
 
   .btn-press {
@@ -63,38 +108,74 @@
     animation: fadeInUp 0.4s ease-out forwards;
   }
 
+  /* ---- HUD utilities ---- */
+  .hairline {
+    height: 1px;
+    width: 100%;
+    border: 0;
+    background: linear-gradient(90deg, transparent, var(--line) 18%, var(--line) 82%, transparent);
+  }
+  .hairline-t { border-top: 1px solid var(--line); }
+  .hairline-b { border-bottom: 1px solid var(--line); }
+
+  .hud-glow {
+    box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.35), 0 0 4px rgba(var(--accent-rgb), 0.25);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px rgba(124, 58, 237, 0.45), 0 0 26px rgba(124, 58, 237, 0.18);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ---- section accent glows (kept + refreshed) ---- */
   .section-glow-goals {
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 22px rgba(124, 58, 237, 0.32), var(--panel-inset);
     border-color: rgba(124, 58, 237, 0.5) !important;
   }
   .section-glow-habits {
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
-    border-color: rgba(6, 182, 212, 0.5) !important;
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.30), var(--panel-inset);
+    border-color: rgba(34, 211, 238, 0.5) !important;
   }
   .section-glow-money {
-    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.30), var(--panel-inset);
     border-color: rgba(16, 185, 129, 0.5) !important;
   }
   .section-glow-fitness {
-    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+    box-shadow: 0 0 22px rgba(249, 115, 22, 0.30), var(--panel-inset);
     border-color: rgba(249, 115, 22, 0.5) !important;
   }
   .section-glow-projects {
-    box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+    box-shadow: 0 0 22px rgba(236, 72, 153, 0.30), var(--panel-inset);
     border-color: rgba(236, 72, 153, 0.5) !important;
   }
   .section-glow-journal {
-    box-shadow: 0 0 20px rgba(234, 179, 8, 0.3);
+    box-shadow: 0 0 22px rgba(234, 179, 8, 0.30), var(--panel-inset);
     border-color: rgba(234, 179, 8, 0.5) !important;
   }
   .section-glow-school {
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 22px rgba(59, 130, 246, 0.30), var(--panel-inset);
     border-color: rgba(59, 130, 246, 0.5) !important;
   }
   .section-glow-dashboard {
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 22px rgba(124, 58, 237, 0.32), var(--panel-inset);
     border-color: rgba(124, 58, 237, 0.5) !important;
   }
+}
+
+/* ---- Numeric readouts: JetBrains Mono, tabular figures ----
+   Placed after @tailwind utilities so .font-mono resolves to the
+   HUD tech font (falls back to the monospace stack). */
+.readout,
+.font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 @keyframes fadeInUp {
@@ -135,6 +216,23 @@
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+/* Soft HUD pulse + scanline (subtle, opt-in via class) */
+@keyframes hudPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes hudScan {
+  0% { transform: translateY(-120%); opacity: 0; }
+  12% { opacity: 0.5; }
+  88% { opacity: 0.5; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+
+.animate-hud-pulse {
+  animation: hudPulse 2.4s ease-in-out infinite;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -142,4 +240,28 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ---- Recharts HUD theming ----
+   Glow scoped to data marks only (never axis text, so numbers stay crisp).
+   Wrapper sets `color`, so drop-shadow currentColor tints to the series color. */
+.hud-chart .recharts-area-curve,
+.hud-chart .recharts-line-curve {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+.hud-chart .recharts-bar-rectangle > path {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+.hud-chart .recharts-radar-polygon {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.hud-chart .recharts-cartesian-axis-line,
+.hud-chart .recharts-polar-grid-angle line,
+.hud-chart .recharts-polar-grid-concentric-polygon {
+  opacity: 0.9;
+}
+.recharts-tooltip-wrapper:focus,
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
 }

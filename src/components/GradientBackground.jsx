@@ -16,41 +16,74 @@ export default function GradientBackground({ section = 'dashboard' }) {
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+      {/* Base HUD depth: radial violet/cyan wash */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(1000px 700px at 12% -8%, rgba(124,58,237,0.12), transparent 60%),' +
+            'radial-gradient(820px 620px at 100% 4%, rgba(34,211,238,0.09), transparent 55%),' +
+            'radial-gradient(900px 900px at 50% 118%, rgba(124,58,237,0.07), transparent 62%)',
+        }}
+      />
+
+      {/* Faint hairline grid texture */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),' +
+            'linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px)',
+          backgroundSize: '46px 46px',
+          maskImage: 'radial-gradient(120% 120% at 50% 20%, #000 30%, transparent 92%)',
+          WebkitMaskImage: 'radial-gradient(120% 120% at 50% 20%, #000 30%, transparent 92%)',
+        }}
+      />
+
+      {/* Slow drifting section-tinted blobs */}
       <div
         className="absolute rounded-full animate-blob1"
         style={{
-          width: '500px',
-          height: '500px',
+          width: '480px',
+          height: '480px',
           top: '-150px',
-          left: '-100px',
+          left: '-110px',
           background: colors[0],
-          opacity: 0.12,
+          opacity: 0.11,
           filter: 'blur(80px)',
         }}
       />
       <div
         className="absolute rounded-full animate-blob2"
         style={{
-          width: '400px',
-          height: '400px',
-          bottom: '100px',
-          right: '-100px',
-          background: colors[1],
-          opacity: 0.1,
+          width: '420px',
+          height: '420px',
+          bottom: '80px',
+          right: '-110px',
+          background: '#22D3EE',
+          opacity: 0.08,
           filter: 'blur(80px)',
         }}
       />
       <div
         className="absolute rounded-full animate-blob3"
         style={{
-          width: '350px',
-          height: '350px',
+          width: '360px',
+          height: '360px',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
           background: colors[2],
           opacity: 0.08,
           filter: 'blur(80px)',
+        }}
+      />
+
+      {/* Vignette for depth */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'radial-gradient(130% 100% at 50% 40%, transparent 55%, rgba(0,0,0,0.55) 100%)',
         }}
       />
     </div>

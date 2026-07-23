@@ -18,15 +18,31 @@ export default function Modal({ isOpen, onClose, title, children, accentColor = 
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{
+          background:
+            'radial-gradient(120% 90% at 50% 0%, rgba(124,58,237,0.10), transparent 55%), rgba(0,0,0,0.72)',
+        }}
+        onClick={onClose}
+      />
 
       {/* Modal */}
       <div
         className="relative w-full max-w-lg mx-0 sm:mx-4 glass-card animate-slideUp rounded-t-3xl sm:rounded-3xl overflow-hidden"
-        style={{ maxHeight: '90vh' }}
+        style={{
+          maxHeight: '90vh',
+          boxShadow: `0 -8px 60px rgba(0,0,0,0.6), 0 0 40px ${accentColor}22, inset 0 1px 0 rgba(255,255,255,0.07)`,
+        }}
       >
-        {/* Top accent bar */}
-        <div className="h-1 w-full" style={{ background: accentColor }} />
+        {/* Glowing top accent bar */}
+        <div
+          className="h-[3px] w-full"
+          style={{
+            background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`,
+            boxShadow: `0 0 14px ${accentColor}, 0 0 4px ${accentColor}`,
+          }}
+        />
 
         {/* Handle for mobile */}
         <div className="flex justify-center pt-3 sm:hidden">
@@ -34,7 +50,7 @@ export default function Modal({ isOpen, onClose, title, children, accentColor = 
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-4 pb-2">
+        <div className="hairline-b flex items-center justify-between px-6 pt-4 pb-3">
           <h2 className="text-lg font-bold text-white tracking-tight">{title}</h2>
           <button
             onClick={onClose}
@@ -45,7 +61,7 @@ export default function Modal({ isOpen, onClose, title, children, accentColor = 
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+        <div className="px-6 pb-6 pt-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 88px)' }}>
           {children}
         </div>
       </div>
