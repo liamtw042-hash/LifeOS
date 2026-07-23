@@ -4,7 +4,7 @@ import Card from '../Card'
 import Modal from '../Modal'
 import LoadingSpinner from '../LoadingSpinner'
 import RestTimer from './RestTimer'
-import { LineChart, BarChart } from '../charts/Charts'
+import { LineChart, BarChart, RadarChart, Heatmap } from '../charts/Charts'
 import {
   SPLIT,
   WORKOUTS,
@@ -30,11 +30,30 @@ import {
 } from '../../lib/training'
 
 const COLOR = '#7C3AED'
+const CYAN = '#22D3EE'
 
 const todayStr = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+function localKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Map a specific muscle label to one of six training groups (read-only, for the
+// muscle-balance radar). Unknown/custom muscles fall into "Arms" (accessory).
+function muscleGroup(muscle) {
+  const m = String(muscle || '').toLowerCase()
+  if (/chest|pec/.test(m)) return 'Chest'
+  if (/quad|ham|glute|calf|calve|leg|adduct|abduct/.test(m)) return 'Legs'
+  if (/delt|shoulder/.test(m)) return 'Shoulders'
+  if (/bicep|tricep|forearm|brachial/.test(m)) return 'Arms'
+  if (/core|abs|oblique|plank/.test(m)) return 'Core'
+  if (/lat|back|trap|rhom|spine|erector/.test(m)) return 'Back'
+  return 'Arms'
+}
+const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
 
 // Pick the reference set from a past session (the heaviest by est 1RM).
 function bestSet(sets) {
@@ -104,6 +123,7 @@ export default function TrainTab() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingCustom, setEditingCustom] = useState(null) // doc being edited in builder
   const [historyFor, setHistoryFor] = useState(null) // exercise name
+  const [progressEx, setProgressEx] = useState('') // selected exercise for the 1RM progression chart
 
   const readyRef = useRef(false)
   const sessionsRef = useRef([])
@@ -341,6 +361,78 @@ export default function TrainTab() {
     [sessions]
   )
 
+  // ---- Read-only training analytics (derived from already-loaded sessions) ----
+  // Exercises that have at least one real (weighted) top set — drives the picker.
+  const progressExercises = useMemo(() => prBoard.map((p) => p.name), [prBoard])
+  const activeProgressEx = progressEx || progressExercises[0] || ''
+  // Estimated-1RM progression over time for the selected exercise.
+  const progressSeries = useMemo(() => {
+    if (!activeProgressEx) return []
+    const rows = exerciseHistory(activeProgressEx, sessions)
+    return [...rows]
+      .reverse()
+      .map((row) => {
+        const best = bestSet(row.sets)
+        return { label: (row.date || '').slice(5).replace('-', '/'), value: epley1RM(best?.weight, best?.reps) }
+      })
+  }, [activeProgressEx, sessions])
+
+  // Total training volume per (Monday-start) week, most recent ~8 weeks.
+  const weeklyVolume = useMemo(() => {
+    const byWeek = {}
+    for (const s of sessions || []) {
+      if (!s.date) continue
+      const d = new Date(s.date + 'T00:00:00')
+      if (Number.isNaN(d.getTime())) continue
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+      const key = localKey(monday)
+      const vol = Number(s.volume) || estimateVolume(s.exercises)
+      byWeek[key] = (byWeek[key] || 0) + vol
+    }
+    return Object.keys(byWeek)
+      .sort()
+      .slice(-8)
+      .map((k) => ({ label: k.slice(5).replace('-', '/'), value: Math.round(byWeek[k]) }))
+  }, [sessions])
+
+  // Working sets per muscle group over the last 7 days → radar axes.
+  const muscleBalance = useMemo(() => {
+    const groups = Object.fromEntries(MUSCLE_GROUPS.map((g) => [g, 0]))
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    for (const s of sessions || []) {
+      if (!s.date) continue
+      const d = new Date(s.date + 'T00:00:00')
+      const diff = Math.round((today - d) / 86400000)
+      if (!(diff >= 0 && diff <= 6)) continue
+      for (const ex of s.exercises || []) {
+        const g = muscleGroup(ex.muscle)
+        groups[g] += (ex.sets || []).filter((st) => !st.warmup).length
+      }
+    }
+    const max = Math.max(...Object.values(groups), 1)
+    return MUSCLE_GROUPS.map((g) => ({ axis: g, value: groups[g], max }))
+  }, [sessions])
+
+  // Trained-day heatmap: level bucketed by that day's working-set count.
+  const heatDays = useMemo(() => {
+    const byDate = {}
+    for (const s of sessions || []) {
+      if (!s.date) continue
+      let count = 0
+      for (const ex of s.exercises || []) count += (ex.sets || []).filter((st) => !st.warmup).length
+      byDate[s.date] = (byDate[s.date] || 0) + count
+    }
+    return Object.keys(byDate).map((date) => {
+      const c = byDate[date]
+      const level = c <= 6 ? 1 : c <= 12 ? 2 : c <= 20 ? 3 : 4
+      return { date, level }
+    })
+  }, [sessions])
+
+  const hasAnalytics = (sessions || []).length > 0
+
   return (
     <div className="space-y-4">
       {/* Day selector */}
@@ -353,14 +445,14 @@ export default function TrainTab() {
             <button
               key={d}
               onClick={() => { setSource('today'); setSelectedDay(d) }}
-              className="btn-press flex-shrink-0 px-3 py-2 rounded-xl text-center transition-all"
+              className="btn-press flex-shrink-0 px-3 py-2 rounded-xl text-center transition-all duration-[250ms]"
               style={{
                 background: active ? COLOR : 'rgba(255,255,255,0.05)',
                 border: `1px solid ${active ? COLOR : isToday ? COLOR + '55' : 'rgba(255,255,255,0.1)'}`,
                 boxShadow: active ? `0 0 16px ${COLOR}55` : 'none',
               }}
             >
-              <div className="text-[11px] font-black" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.85)' }}>
+              <div className="readout text-[11px] font-black" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.85)' }}>
                 {d}
               </div>
               <div
@@ -393,7 +485,7 @@ export default function TrainTab() {
                   setSource(opt.key)
                 }
               }}
-              className="btn-press flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+              className="btn-press flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-[250ms]"
               style={{
                 background: active ? COLOR : 'rgba(255,255,255,0.05)',
                 color: active ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -493,10 +585,10 @@ export default function TrainTab() {
                 <div className="text-xl font-black text-white">{workoutName}</div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-black tabular-nums" style={{ color: COLOR }}>
+                <div className={`readout text-2xl font-black ${startedAt ? 'text-glow' : ''}`} style={{ color: COLOR }}>
                   {startedAt ? `${elapsedMin}:${String(elapsedSec).padStart(2, '0')}` : '—'}
                 </div>
-                <div className="text-[10px] text-white/35 uppercase tracking-widest">
+                <div className="readout text-[10px] text-white/35 uppercase tracking-widest">
                   {doneSetCount} sets · {liveVolume}kg vol
                 </div>
               </div>
@@ -576,6 +668,53 @@ export default function TrainTab() {
         </>
       )}
 
+      {/* ---- Training analytics (read-only, derived from session history) ---- */}
+      {hasAnalytics && (
+        <div className="space-y-4 pt-1">
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-bold text-white/40 uppercase tracking-widest whitespace-nowrap">Training Analytics</div>
+            <div className="flex-1 hairline" />
+          </div>
+
+          {/* Strength progression per exercise */}
+          <div className="hud-panel p-4">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest">Est. 1RM Progression</div>
+              {progressExercises.length > 0 && (
+                <select
+                  value={activeProgressEx}
+                  onChange={(e) => setProgressEx(e.target.value)}
+                  className="max-w-[56%] truncate bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:border-[#7C3AED]"
+                >
+                  {progressExercises.map((n) => (
+                    <option key={n} value={n} className="bg-black">{n}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <LineChart data={progressSeries} color={CYAN} height={150} yLabel="kg" />
+          </div>
+
+          {/* Weekly training volume */}
+          <div className="hud-panel p-4">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">Weekly Volume · kg</div>
+            <BarChart data={weeklyVolume} color={COLOR} height={150} />
+          </div>
+
+          {/* Muscle-group balance this week */}
+          <div className="hud-panel p-4">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Muscle Balance · sets this week</div>
+            <RadarChart data={muscleBalance} color={COLOR} />
+          </div>
+
+          {/* Training consistency heatmap */}
+          <div className="hud-panel p-4">
+            <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">Training Consistency</div>
+            <Heatmap days={heatDays} color={CYAN} weeks={16} />
+          </div>
+        </div>
+      )}
+
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
         <div>
@@ -591,7 +730,7 @@ export default function TrainTab() {
                     {s.mode === 'bodyweight' ? 'Bodyweight' : s.mode === 'custom' ? (s.day || 'Custom') : SPLIT[s.day] || s.day || 'Workout'}
                     {s.prs?.length ? <span className="ml-2 text-[10px] font-black px-1.5 py-0.5 rounded" style={{ background: COLOR, color: '#fff' }}>{s.prs.length} PR</span> : null}
                   </div>
-                  <div className="text-[11px] text-white/40">
+                  <div className="readout text-[11px] text-white/40">
                     {s.date} · {s.durationMin || 0}min · {s.volume || 0}kg
                   </div>
                   {s.notes ? <div className="text-[11px] text-white/30 italic mt-0.5 truncate">“{s.notes}”</div> : null}
@@ -668,12 +807,12 @@ export default function TrainTab() {
               <div key={pr.name} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-white/85 truncate">{pr.name}</div>
-                  <div className="text-[11px] text-white/40">
+                  <div className="readout text-[11px] text-white/40">
                     {pr.weight || 'BW'}{pr.weight ? 'kg' : ''} × {pr.reps} · {pr.date}
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="text-lg font-black" style={{ color: COLOR }}>{pr.est1RM}</div>
+                  <div className="readout text-lg font-black text-glow" style={{ color: COLOR }}>{pr.est1RM}</div>
                   <div className="text-[9px] text-white/35 uppercase tracking-widest">est 1RM</div>
                 </div>
               </div>
@@ -735,7 +874,7 @@ function ExerciseCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-base font-black text-white truncate">{ex.name}</div>
-          <div className="text-[11px] text-white/40 mt-0.5">
+          <div className="readout text-[11px] text-white/40 mt-0.5">
             {ex.muscle} · {ex.repRange?.[0]}–{ex.repRange?.[1]} {repLabel} · {ex.sets.filter((s) => !s.warmup).length} sets
           </div>
         </div>
@@ -758,7 +897,7 @@ function ExerciseCard({
 
       {/* Last session reference */}
       {ref && (
-        <div className="mt-2 text-[11px] text-white/35">
+        <div className="readout mt-2 text-[11px] text-white/35">
           Last: {ref.weight || 'BW'}{ref.weight ? 'kg' : ''} × {ref.reps}{' '}
           {ex.lastSets.length > 1 ? `(${ex.lastSets.length} sets)` : ''}
         </div>
@@ -779,7 +918,7 @@ function ExerciseCard({
           return (
             <div key={setIdx} className="relative flex items-center gap-2" style={s.warmup ? { opacity: 0.85 } : undefined}>
               <span
-                className="w-6 text-center text-[11px] font-black"
+                className="readout w-6 text-center text-[11px] font-black"
                 style={{ color: s.warmup ? '#F59E0B' : 'rgba(255,255,255,0.5)' }}
                 title={s.warmup ? 'Warmup set (excluded from volume/PRs)' : undefined}
               >
@@ -901,7 +1040,7 @@ function IconBtn({ children, onClick, title }) {
 function SummaryStat({ label, value }) {
   return (
     <div className="text-center glass-card py-3 rounded-xl">
-      <div className="text-xl font-black" style={{ color: COLOR }}>{value}</div>
+      <div className="readout text-xl font-black" style={{ color: COLOR }}>{value}</div>
       <div className="text-[9px] text-white/35 uppercase tracking-widest mt-0.5">{label}</div>
     </div>
   )
@@ -950,14 +1089,14 @@ function ExerciseHistoryView({ name, history }) {
         return (
           <div key={i} className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-bold text-white/50">{row.date}</span>
-              <span className="text-[11px] font-bold" style={{ color: COLOR }}>
+              <span className="readout text-xs font-bold text-white/50">{row.date}</span>
+              <span className="readout text-[11px] font-bold" style={{ color: COLOR }}>
                 best {epley1RM(best?.weight, best?.reps)} est 1RM
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {row.sets.map((s, j) => (
-                <span key={j} className="text-[11px] font-semibold text-white/70 px-2 py-1 rounded-md bg-white/5 border border-white/10">
+                <span key={j} className="readout text-[11px] font-semibold text-white/70 px-2 py-1 rounded-md bg-white/5 border border-white/10">
                   {s.weight || 'BW'}{s.weight ? '' : ''} × {s.reps}
                 </span>
               ))}
@@ -1007,7 +1146,7 @@ function OneRMCalculator({ isOpen, onClose }) {
 
         <div className="text-center p-4 rounded-xl" style={{ background: `${COLOR}18`, border: `1px solid ${COLOR}40` }}>
           <div className="text-[11px] font-bold uppercase tracking-widest text-white/40">Estimated 1RM</div>
-          <div className="text-4xl font-black mt-1" style={{ color: COLOR }}>{oneRM || '—'}<span className="text-lg">kg</span></div>
+          <div className="readout text-4xl font-black mt-1 text-glow" style={{ color: COLOR }}>{oneRM || '—'}<span className="text-lg">kg</span></div>
           <div className="text-[10px] text-white/30 mt-1">Epley formula</div>
         </div>
 
@@ -1017,9 +1156,9 @@ function OneRMCalculator({ isOpen, onClose }) {
             <div className="space-y-1.5">
               {table.map((row) => (
                 <div key={row.pct} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <span className="w-10 text-sm font-black" style={{ color: COLOR }}>{row.pct}%</span>
+                  <span className="readout w-10 text-sm font-black" style={{ color: COLOR }}>{row.pct}%</span>
                   <div className="flex-1">
-                    <div className="text-sm font-bold text-white">{row.weight}kg</div>
+                    <div className="readout text-sm font-bold text-white">{row.weight}kg</div>
                     <div className="text-[10px] text-white/35">{row.label} · {row.reps} reps</div>
                   </div>
                 </div>
@@ -1333,13 +1472,13 @@ function PlateCalculator({ isOpen, prefill, onClose }) {
           ) : (
             <div className="flex flex-wrap gap-2">
               {bd.perSide.map((p, i) => (
-                <span key={i} className="text-sm font-black px-2.5 py-1.5 rounded-lg text-white" style={{ background: COLOR }}>
+                <span key={i} className="readout text-sm font-black px-2.5 py-1.5 rounded-lg text-white" style={{ background: COLOR }}>
                   {p.count} × {p.plate}kg
                 </span>
               ))}
             </div>
           )}
-          <div className="text-[11px] text-white/40 mt-2">
+          <div className="readout text-[11px] text-white/40 mt-2">
             {bd.belowBar
               ? `Target below bar weight (${bd.bar}kg)`
               : `Loads to ${bd.loadedTotal}kg${bd.leftover > 0 ? ` · ${bd.leftover}kg short (no plate fits)` : ''}`}
@@ -1363,13 +1502,13 @@ function PlateCalculator({ isOpen, prefill, onClose }) {
           </div>
           {oneRM > 0 && (
             <>
-              <div className="text-[11px] text-white/50">Est 1RM <span className="font-black" style={{ color: COLOR }}>{oneRM}kg</span> — tap a % to load it:</div>
+              <div className="readout text-[11px] text-white/50">Est 1RM <span className="font-black" style={{ color: COLOR }}>{oneRM}kg</span> — tap a % to load it:</div>
               <div className="flex flex-wrap gap-1.5">
                 {pctTable.map((row) => (
                   <button
                     key={row.pct}
                     onClick={() => setTarget(String(row.weight))}
-                    className="btn-press px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white/5 border border-white/10 text-white/70"
+                    className="readout btn-press px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white/5 border border-white/10 text-white/70"
                   >
                     {row.pct}% · {row.weight}kg
                   </button>
