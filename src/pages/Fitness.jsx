@@ -8,11 +8,13 @@ import MacroRings from '../components/fitness/MacroRings'
 import BarcodeScanner from '../components/fitness/BarcodeScanner'
 import TrainTab from '../components/fitness/TrainTab'
 import ProgressTab from '../components/fitness/ProgressTab'
+import { BarChart, LineChart } from '../components/charts/Charts'
 import { FOODS } from '../data/foods'
 import { parseInlineMacros, parseFoodText } from '../lib/foodParser'
 import { calcTargets, ACTIVITY_LEVELS } from '../lib/nutrition'
 
 const COLOR = '#7C3AED'
+const CYAN = '#22D3EE'
 const DEFAULT_TARGETS = { calories: 2200, protein: 150, carbs: 220, fat: 70 }
 const WATER_GOAL_ML = 2000
 const CUP_ML = 250
@@ -89,11 +91,12 @@ export default function Fitness() {
   return (
     <div className="page-enter min-h-screen p-4 pt-10 pb-24">
       <div className="mb-5">
-        <h1 className="text-3xl font-black tracking-[-0.03em]" style={{ color: COLOR }}>Fitness</h1>
+        <div className="readout text-[10px] font-bold uppercase tracking-[0.3em] text-white/35 mb-1">// System online</div>
+        <h1 className="text-3xl font-black tracking-[-0.03em] text-glow" style={{ color: COLOR }}>Fitness</h1>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-2 mb-6 p-1 rounded-2xl bg-white/5 border border-white/10">
+      {/* Tab bar — HUD segmented control */}
+      <div className="hud-panel flex gap-1 mb-6 p-1 rounded-2xl">
         {[
           { key: 'food', label: 'Food', icon: '🍽️' },
           { key: 'train', label: 'Train', icon: '💪' },
@@ -104,11 +107,11 @@ export default function Fitness() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className="btn-press flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+              className="btn-press flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-[250ms]"
               style={{
-                background: active ? COLOR : 'transparent',
+                background: active ? `linear-gradient(135deg, ${COLOR}, #6D28D9)` : 'transparent',
                 color: active ? '#fff' : 'rgba(255,255,255,0.5)',
-                boxShadow: active ? `0 0 20px ${COLOR}55` : 'none',
+                boxShadow: active ? `0 0 22px ${COLOR}66, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
               }}
             >
               <span className="mr-1">{t.icon}</span>{t.label}
@@ -212,6 +215,23 @@ function FoodTab() {
         fat: profile.fat || DEFAULT_TARGETS.fat,
       }
     : DEFAULT_TARGETS
+
+  // Read-only 7-day intake series (ending on the viewed date) derived from the
+  // already-fetched foodLogs — no new reads, purely for the trend charts.
+  const intakeTrend = useMemo(() => {
+    const byDate = {}
+    for (const log of foodLogs || []) byDate[log.date] = log
+    const cals = []
+    const prot = []
+    for (let i = 6; i >= 0; i--) {
+      const k = shiftDate(date, -i)
+      const t = sumTotals(byDate[k]?.items)
+      const label = k.slice(5).replace('-', '/')
+      cals.push({ label, value: Math.round(t.cal) })
+      prot.push({ label, value: Math.round(t.p) })
+    }
+    return { cals, prot }
+  }, [foodLogs, date])
 
   // ---- persistence helpers ----
   // Read the authoritative current state for a given day (falls back to the
@@ -519,7 +539,7 @@ function FoodTab() {
           className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/60 bg-white/5 border border-white/10">‹</button>
         <div className="text-center">
           <div className="font-bold text-white">{prettyDate(date)}</div>
-          <div className="text-[11px] text-white/35">{date}</div>
+          <div className="readout text-[11px] text-white/35">{date}</div>
         </div>
         <button onClick={() => setDate((d) => shiftDate(d, 1))}
           className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/60 bg-white/5 border border-white/10">›</button>
@@ -558,6 +578,23 @@ function FoodTab() {
           </button>
         </div>
         <MacroRings totals={totals} targets={targets} />
+      </Card>
+
+      {/* 7-day intake trend (read-only, derived from foodLogs) */}
+      <Card accentColor={COLOR} className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-bold text-white/40 uppercase tracking-widest">7-Day Intake</div>
+          <div className="readout text-[10px] text-white/30">ending {prettyDate(date)}</div>
+        </div>
+        <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">
+          Calories / day · target {targets.calories}
+        </div>
+        <BarChart data={intakeTrend.cals} color={COLOR} target={targets.calories} height={130} />
+        <div className="hairline my-3" />
+        <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">
+          Protein / day · target {targets.protein}g
+        </div>
+        <LineChart data={intakeTrend.prot} color={CYAN} target={targets.protein} height={110} yLabel="g" />
       </Card>
 
       {lLog && <div className="flex justify-center py-2"><LoadingSpinner color={COLOR} size={22} /></div>}
@@ -602,15 +639,16 @@ function FoodTab() {
                   {preview.items.map((it, i) => (
                     <div key={i} className="flex items-center justify-between text-sm">
                       <span className="text-white/80">
-                        {it.qty && it.qty !== 1 ? <span className="text-white/40">{it.qty}× </span> : null}{it.name}
+                        {it.qty && it.qty !== 1 ? <span className="readout text-white/40">{it.qty}× </span> : null}{it.name}
                       </span>
-                      <span className="text-white/45 text-xs">{it.cal} cal · {it.p}p {it.c}c {it.f}f</span>
+                      <span className="readout text-white/45 text-xs">{it.cal} cal · {it.p}p {it.c}c {it.f}f</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 text-sm">
+                <div className="hairline my-2" />
+                <div className="flex items-center justify-between text-sm">
                   <span className="font-bold text-white">Total</span>
-                  <span className="font-bold" style={{ color: COLOR }}>
+                  <span className="readout font-bold" style={{ color: COLOR }}>
                     {preview.totals.cal} cal · {preview.totals.p}p {preview.totals.c}c {preview.totals.f}f
                   </span>
                 </div>
@@ -669,20 +707,20 @@ function FoodTab() {
               <button key={i} onClick={() => addFood(f, 1)}
                 className="btn-press flex-shrink-0 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-left">
                 <div className="text-xs font-bold text-white/85 whitespace-nowrap">{f.name}</div>
-                <div className="text-[10px] text-white/40">{Math.round(Number(f.cal) || 0)} cal</div>
+                <div className="readout text-[10px] text-white/40">{Math.round(Number(f.cal) || 0)} cal</div>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Water tracker */}
-      <Card accentColor={COLOR} className="p-4">
+      {/* Water tracker — cyan hydration instrument */}
+      <Card accentColor={CYAN} className="p-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Water</div>
-            <div className="text-lg font-black text-white mt-0.5">
-              {water}ml <span className="text-sm text-white/40 font-semibold">/ {WATER_GOAL_ML}ml</span>
+            <div className="readout text-lg font-black text-white mt-0.5">
+              {water}<span className="text-sm text-white/40 font-semibold"> ml / {WATER_GOAL_ML}ml</span>
             </div>
           </div>
           <div className="flex gap-2">
@@ -690,19 +728,22 @@ function FoodTab() {
               className="btn-press w-10 h-10 rounded-full text-lg font-bold text-white/70 bg-white/5 border border-white/10">−</button>
             <button onClick={() => changeWater(CUP_ML)}
               className="btn-press w-10 h-10 rounded-full text-lg font-bold text-white"
-              style={{ background: COLOR }}>+</button>
+              style={{ background: CYAN, boxShadow: `0 0 16px ${CYAN}66` }}>+</button>
           </div>
         </div>
         <div className="flex gap-1 mt-3">
-          {Array.from({ length: goalCups }).map((_, i) => (
-            <div key={i} className="flex-1 h-2 rounded-full transition-colors"
-              style={{ background: i < cups ? COLOR : 'rgba(255,255,255,0.08)' }} />
-          ))}
+          {Array.from({ length: goalCups }).map((_, i) => {
+            const on = i < cups
+            return (
+              <div key={i} className="flex-1 h-2 rounded-full transition-all duration-300"
+                style={{ background: on ? CYAN : 'rgba(255,255,255,0.08)', boxShadow: on ? `0 0 8px ${CYAN}88` : 'none' }} />
+            )
+          })}
         </div>
       </Card>
 
       {/* Tap-to-add picker */}
-      <div>
+      <div className="hud-panel p-4">
         <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Add Food</div>
         <input
           value={search}
@@ -720,14 +761,14 @@ function FoodTab() {
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-white/85 truncate">{food.name}</div>
-                    <div className="text-[11px] text-white/40">
+                    <div className="readout text-[11px] text-white/40">
                       {Math.round((Number(food.cal) || 0) * eff)} cal · {Math.round((Number(food.p) || 0) * eff)}p {Math.round((Number(food.c) || 0) * eff)}c {Math.round((Number(food.f) || 0) * eff)}f{food.serving ? ` · ${food.serving}` : ''}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button onClick={() => bumpQty(food.name, -1)}
                       className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">−</button>
-                    <span className="w-6 text-center text-sm font-bold text-white">{q}</span>
+                    <span className="readout w-6 text-center text-sm font-bold text-white">{q}</span>
                     <button onClick={() => bumpQty(food.name, 1)}
                       className="btn-press w-7 h-7 rounded-lg text-white/60 bg-white/5 border border-white/10">+</button>
                     <button onClick={() => { addFood(food, eff); setQtyMap((m) => ({ ...m, [food.name]: 1 })); setPortion(food.name, 1) }}
@@ -758,7 +799,7 @@ function FoodTab() {
       </div>
 
       {/* Logged items */}
-      <div>
+      <div className="hud-panel p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Logged · {prettyDate(date)}</div>
           {items.length > 0 && (
@@ -780,18 +821,18 @@ function FoodTab() {
               const sub = sumTotals(rows.map((r) => r.it))
               return (
                 <div key={mk}>
-                  <div className="flex items-center justify-between mb-1.5 px-1">
+                  <div className="hairline-b flex items-center justify-between mb-1.5 px-1 pb-1.5">
                     <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: COLOR }}>{MEAL_LABEL[mk]}</span>
-                    <span className="text-[11px] font-bold text-white/40">{sub.cal} cal</span>
+                    <span className="readout text-[11px] font-bold text-white/40">{sub.cal} cal</span>
                   </div>
                   <div className="space-y-2">
                     {rows.map(({ it, idx }) => (
                       <div key={idx} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
                         <button onClick={() => setEditIdx(idx)} className="flex-1 min-w-0 text-left btn-press">
                           <div className="text-sm font-bold text-white/85 truncate">
-                            {it.qty && it.qty !== 1 ? <span className="text-white/40">{it.qty}× </span> : null}{it.name}
+                            {it.qty && it.qty !== 1 ? <span className="readout text-white/40">{it.qty}× </span> : null}{it.name}
                           </div>
-                          <div className="text-[11px] text-white/40">{it.cal} cal · {it.p}p {it.c}c {it.f}f</div>
+                          <div className="readout text-[11px] text-white/40">{it.cal} cal · {it.p}p {it.c}c {it.f}f</div>
                         </button>
                         <button onClick={() => removeItem(idx)} className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
                       </div>
@@ -800,9 +841,9 @@ function FoodTab() {
                 </div>
               )
             })}
-            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: `${COLOR}18` }}>
+            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: `${COLOR}18`, border: `1px solid ${COLOR}33`, boxShadow: `0 0 18px ${COLOR}22` }}>
               <span className="text-sm font-black text-white">Total</span>
-              <span className="text-sm font-black" style={{ color: COLOR }}>
+              <span className="readout text-sm font-black text-glow" style={{ color: COLOR }}>
                 {totals.cal} cal · {totals.p}p {totals.c}c {totals.f}f
               </span>
             </div>
@@ -873,7 +914,7 @@ function FoodTab() {
                 <div key={tpl.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-white/85 truncate">{tpl.name}</div>
-                    <div className="text-[11px] text-white/40">{(tpl.items || []).length} items · {t.cal} cal</div>
+                    <div className="readout text-[11px] text-white/40">{(tpl.items || []).length} items · {t.cal} cal</div>
                   </div>
                   <button onClick={() => applyTemplate(tpl)}
                     className="btn-press px-3 py-2 rounded-lg text-sm font-bold text-white" style={{ background: COLOR }}>
@@ -954,7 +995,7 @@ function EditItemModal({ isOpen, item, onClose, onSave, onDelete }) {
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => setQty((q) => Math.max(0.25, Math.round((q - 0.25) * 100) / 100))}
               className="btn-press w-11 h-11 rounded-xl text-lg font-bold text-white/70 bg-white/5 border border-white/10">−</button>
-            <span className="flex-1 text-center text-xl font-black text-white">{qty}</span>
+            <span className="readout flex-1 text-center text-xl font-black text-white">{qty}</span>
             <button type="button" onClick={() => setQty((q) => Math.round((q + 0.25) * 100) / 100)}
               className="btn-press w-11 h-11 rounded-xl text-lg font-bold text-white" style={{ background: COLOR }}>+</button>
           </div>
@@ -981,7 +1022,7 @@ function EditItemModal({ isOpen, item, onClose, onSave, onDelete }) {
 
         <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
           <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">New macros</div>
-          <div className="text-sm font-bold" style={{ color: COLOR }}>
+          <div className="readout text-sm font-bold" style={{ color: COLOR }}>
             {preview.cal} cal · {preview.p}p {preview.c}c {preview.f}f
           </div>
         </div>
@@ -1058,7 +1099,7 @@ function RecipesModal({ isOpen, onClose, recipes, allFoods, mealLabel, onApply, 
                   <div key={rec.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-white/85 truncate">{rec.name}</div>
-                      <div className="text-[11px] text-white/40">{(rec.items || []).length} items · {t.cal} cal</div>
+                      <div className="readout text-[11px] text-white/40">{(rec.items || []).length} items · {t.cal} cal</div>
                     </div>
                     <button onClick={() => onDelete(rec.id)}
                       className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0 px-1">✕</button>
@@ -1085,7 +1126,7 @@ function RecipesModal({ isOpen, onClose, recipes, allFoods, mealLabel, onApply, 
                 <div key={i} className="flex items-center justify-between text-sm">
                   <span className="text-white/80 truncate">{it.name}</span>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-white/40 text-xs">{it.cal} cal</span>
+                    <span className="readout text-white/40 text-xs">{it.cal} cal</span>
                     <button onClick={() => setRItems((prev) => prev.filter((_, x) => x !== i))}
                       className="text-white/20 hover:text-red-400">✕</button>
                   </div>
@@ -1093,7 +1134,7 @@ function RecipesModal({ isOpen, onClose, recipes, allFoods, mealLabel, onApply, 
               ))}
               <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/10 text-sm">
                 <span className="font-bold text-white">Total</span>
-                <span className="font-bold" style={{ color: COLOR }}>{rTotals.cal} cal · {rTotals.p}p {rTotals.c}c {rTotals.f}f</span>
+                <span className="readout font-bold" style={{ color: COLOR }}>{rTotals.cal} cal · {rTotals.p}p {rTotals.c}c {rTotals.f}f</span>
               </div>
             </div>
           )}
@@ -1106,7 +1147,7 @@ function RecipesModal({ isOpen, onClose, recipes, allFoods, mealLabel, onApply, 
                 className="btn-press w-full flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-left">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-white/85 truncate">{food.name}</div>
-                  <div className="text-[11px] text-white/40">{food.cal} cal · {food.p}p {food.c}c {food.f}f</div>
+                  <div className="readout text-[11px] text-white/40">{food.cal} cal · {food.p}p {food.c}c {food.f}f</div>
                 </div>
                 <span className="text-lg font-bold flex-shrink-0" style={{ color: COLOR }}>+</span>
               </button>
@@ -1225,7 +1266,7 @@ function TargetCalculatorModal({ isOpen, onClose, profile, onSave }) {
 
         <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10">
           <div className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-1">Calculated targets</div>
-          <div className="text-sm font-bold" style={{ color: COLOR }}>
+          <div className="readout text-sm font-bold" style={{ color: COLOR }}>
             {preview.calories} cal · {preview.protein}p {preview.carbs}c {preview.fat}f
           </div>
         </div>

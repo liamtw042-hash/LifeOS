@@ -4,11 +4,12 @@ import Card from '../Card'
 import Modal from '../Modal'
 import LoadingSpinner from '../LoadingSpinner'
 import { generateCoachInsights } from '../../lib/coach'
-import { BarChart, LineChart } from '../charts/Charts'
+import { BarChart, LineChart, Sparkline } from '../charts/Charts'
 import { formatWeight, toKg, fromKg } from '../../lib/units'
 import { weightProjection, prTimeline } from '../../lib/training'
 
 const COLOR = '#7C3AED'
+const CYAN = '#22D3EE'
 const TONE = { good: '#10B981', warn: '#F97316', info: '#7C3AED' }
 const DEFAULT_TARGETS = { calories: 2200, protein: 150 }
 const MEAS_METRICS = [
@@ -325,7 +326,7 @@ export default function ProgressTab() {
 
       {/* ---- Weight header + log ---- */}
       <div className="flex items-center justify-between">
-        <p className="text-white/40 text-sm">{(weightLogs || []).length} weigh-ins</p>
+        <p className="text-white/40 text-sm"><span className="readout">{(weightLogs || []).length}</span> weigh-ins</p>
         <div className="flex items-center gap-2">
           <button onClick={openGoalModal}
             className="btn-press h-10 px-3 rounded-full text-sm font-bold flex items-center gap-1"
@@ -353,15 +354,15 @@ export default function ProgressTab() {
             <>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <div className="text-sm font-black text-white">{projection.current != null ? fmtWt(projection.current) : '–'}</div>
+                  <div className="readout text-sm font-black text-white">{projection.current != null ? fmtWt(projection.current) : '–'}</div>
                   <div className="text-[9px] text-white/35 uppercase tracking-wider mt-0.5">Current</div>
                 </div>
                 <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <div className="text-sm font-black" style={{ color: COLOR }}>{fmtWt(goalWeight)}</div>
+                  <div className="readout text-sm font-black text-glow" style={{ color: COLOR }}>{fmtWt(goalWeight)}</div>
                   <div className="text-[9px] text-white/35 uppercase tracking-wider mt-0.5">Goal</div>
                 </div>
                 <div className="text-center p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                  <div className="text-sm font-black text-white">
+                  <div className="readout text-sm font-black text-white">
                     {projection.remaining != null ? fmtWt(Math.abs(projection.remaining)) : '–'}
                   </div>
                   <div className="text-[9px] text-white/35 uppercase tracking-wider mt-0.5">
@@ -402,18 +403,18 @@ export default function ProgressTab() {
           />
 
           {/* Weekly summary */}
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/10">
+          <div className="hairline-t grid grid-cols-3 gap-2 mt-4 pt-3">
             <div className="text-center">
               <div className="text-[9px] text-white/35 uppercase tracking-wider mb-0.5">This wk avg</div>
-              <div className="text-sm font-black text-white">{weekly.tw != null ? fmtWt(weekly.tw) : '–'}</div>
+              <div className="readout text-sm font-black text-white">{weekly.tw != null ? fmtWt(weekly.tw) : '–'}</div>
             </div>
             <div className="text-center">
               <div className="text-[9px] text-white/35 uppercase tracking-wider mb-0.5">Last wk avg</div>
-              <div className="text-sm font-black text-white">{weekly.lw != null ? fmtWt(weekly.lw) : '–'}</div>
+              <div className="readout text-sm font-black text-white">{weekly.lw != null ? fmtWt(weekly.lw) : '–'}</div>
             </div>
             <div className="text-center">
               <div className="text-[9px] text-white/35 uppercase tracking-wider mb-0.5">Net</div>
-              <div className="text-sm font-black" style={{ color: weekly.net == null ? '#fff' : weekly.net <= 0 ? '#10B981' : '#F97316' }}>
+              <div className="readout text-sm font-black" style={{ color: weekly.net == null ? '#fff' : weekly.net <= 0 ? '#10B981' : '#F97316' }}>
                 {weekly.net == null ? '–' : `${weekly.net > 0 ? '+' : ''}${fmtWt(weekly.net)}`}
               </div>
             </div>
@@ -440,11 +441,11 @@ export default function ProgressTab() {
                     style={{ background: COLOR, boxShadow: `0 0 8px ${COLOR}90` }} />
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-bold text-white truncate">{pr.name}</span>
-                    <span className="text-[10px] text-white/35 flex-shrink-0">
+                    <span className="readout text-[10px] text-white/35 flex-shrink-0">
                       {pr.date ? new Date(pr.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                     </span>
                   </div>
-                  <div className="text-[12px]" style={{ color: COLOR }}>
+                  <div className="readout text-[12px]" style={{ color: COLOR }}>
                     {pr.weight > 0 || pr.reps > 0 ? (
                       <span className="font-black">{fmtWt(pr.weight)} × {pr.reps}</span>
                     ) : (
@@ -487,10 +488,11 @@ export default function ProgressTab() {
           </div>
         ) : (
           <>
-            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Calories / day · target {nutTargets.calories}</div>
+            <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Calories / day · target {nutTargets.calories}</div>
             <BarChart data={nutrition.cals} color={COLOR} target={nutTargets.calories} height={130} />
-            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1 mt-3">Protein / day · target {nutTargets.protein}g</div>
-            <LineChart data={nutrition.prot} color={COLOR} target={nutTargets.protein} height={130} yLabel="g" />
+            <div className="hairline my-3" />
+            <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Protein / day · target {nutTargets.protein}g</div>
+            <LineChart data={nutrition.prot} color={CYAN} target={nutTargets.protein} height={130} yLabel="g" />
           </>
         )}
       </Card>
@@ -514,7 +516,7 @@ export default function ProgressTab() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Latest values with change */}
+            {/* Latest values with change + sparkline */}
             <div className="grid grid-cols-3 gap-2">
               {MEAS_METRICS.map((m) => {
                 const d = measByMetric[m.key]
@@ -522,12 +524,15 @@ export default function ProgressTab() {
                 return (
                   <div key={m.key} className="text-center p-2 rounded-xl bg-white/[0.04] border border-white/10">
                     <div className="text-[9px] text-white/35 uppercase tracking-wider mb-0.5">{m.icon} {m.label}</div>
-                    <div className="text-sm font-black text-white">{d.latest}<span className="text-[10px] text-white/40 font-semibold">cm</span></div>
+                    <div className="readout text-sm font-black text-white">{d.latest}<span className="text-[10px] text-white/40 font-semibold">cm</span></div>
                     {d.change != null && (
-                      <div className="text-[10px] font-bold" style={{ color: d.change === 0 ? 'rgba(255,255,255,0.4)' : d.change < 0 ? '#10B981' : '#F97316' }}>
+                      <div className="readout text-[10px] font-bold" style={{ color: d.change === 0 ? 'rgba(255,255,255,0.4)' : d.change < 0 ? '#10B981' : '#F97316' }}>
                         {d.change > 0 ? '+' : ''}{d.change.toFixed(1)}
                       </div>
                     )}
+                    <div className="spark-fill h-5 mt-1">
+                      <Sparkline data={d.series.map((s) => s.value)} color={COLOR} />
+                    </div>
                   </div>
                 )
               })}
@@ -554,8 +559,8 @@ export default function ProgressTab() {
                 return (
                   <div key={m.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-bold text-white/70">{m.date}</div>
-                      <div className="text-[10px] text-white/40 truncate">{parts.join(' · ') || '—'}</div>
+                      <div className="readout text-[11px] font-bold text-white/70">{m.date}</div>
+                      <div className="readout text-[10px] text-white/40 truncate">{parts.join(' · ') || '—'}</div>
                     </div>
                     <button onClick={() => deleteMeas(m.id)} className="text-white/15 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
                   </div>
@@ -600,8 +605,8 @@ export default function ProgressTab() {
                 <div key={p.id} className="rounded-xl overflow-hidden bg-black/40 border border-white/10">
                   <img src={p.dataUrl} alt={p.date} className="w-full object-cover" style={{ maxHeight: 280 }} />
                   <div className="p-2 text-center">
-                    <div className="text-[11px] font-bold text-white">{p.date}</div>
-                    {wt != null && <div className="text-[10px]" style={{ color: COLOR }}>{fmtWt(wt)}</div>}
+                    <div className="readout text-[11px] font-bold text-white">{p.date}</div>
+                    {wt != null && <div className="readout text-[10px]" style={{ color: COLOR }}>{fmtWt(wt)}</div>}
                   </div>
                 </div>
               )
@@ -650,8 +655,8 @@ export default function ProgressTab() {
         {[...(weightLogs || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((w) => (
           <div key={w.id} className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.04] border border-white/10">
             <div className="flex-1">
-              <span className="font-black text-sm" style={{ color: COLOR }}>{fmtWt(w.value)}</span>
-              <span className="text-xs text-white/30 ml-2">{w.date}</span>
+              <span className="readout font-black text-sm" style={{ color: COLOR }}>{fmtWt(w.value)}</span>
+              <span className="readout text-xs text-white/30 ml-2">{w.date}</span>
             </div>
             <button onClick={() => deleteWeight(w.id)} className="text-white/15 hover:text-red-400 transition-colors flex-shrink-0">✕</button>
           </div>
@@ -681,8 +686,8 @@ export default function ProgressTab() {
           <div className="flex gap-2">
             {(weightLogs || []).slice(-3).reverse().map((w) => (
               <div key={w.id} className="flex-1 text-center glass-card py-2 rounded-xl">
-                <div className="font-black text-sm" style={{ color: COLOR }}>{fmtWt(w.value)}</div>
-                <div className="text-[9px] text-white/30 mt-0.5">{(w.date || '').slice(5)}</div>
+                <div className="readout font-black text-sm" style={{ color: COLOR }}>{fmtWt(w.value)}</div>
+                <div className="readout text-[9px] text-white/30 mt-0.5">{(w.date || '').slice(5)}</div>
               </div>
             ))}
           </div>
