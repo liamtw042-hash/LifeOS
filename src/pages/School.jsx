@@ -5,6 +5,7 @@ import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 const COLOR = '#3B82F6'
+const GROUP_COLOR = { Overdue: '#EF4444', Today: '#22D3EE', 'This week': '#3B82F6', Later: '#64748B' }
 
 const PRIORITIES = [
   { label: 'Low', color: '#10B981' },
@@ -124,22 +125,23 @@ export default function School() {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <p className="font-bold text-white text-sm">{a.title}</p>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                style={{ background: `${priorityColor(a.priority)}18`, color: priorityColor(a.priority) }}>
+              <span className="readout text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md flex-shrink-0"
+                style={{ background: `${priorityColor(a.priority)}1a`, color: priorityColor(a.priority), border: `1px solid ${priorityColor(a.priority)}55`, boxShadow: `0 0 10px ${priorityColor(a.priority)}33` }}>
                 {a.priority}
               </span>
             </div>
             <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1.5">
               {a.subject && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: `${a.color || COLOR}18`, color: a.color || COLOR }}>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1.5"
+                  style={{ background: `${a.color || COLOR}14`, color: a.color || COLOR, border: `1px solid ${a.color || COLOR}44` }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: a.color || COLOR, boxShadow: `0 0 6px ${a.color || COLOR}` }} />
                   {a.subject}
                 </span>
               )}
               {a.dueDate && (() => {
                 const d = daysUntil(a.dueDate)
                 return (
-                  <span className={`text-xs font-semibold ${isOverdue(a) ? 'text-red-400' : d <= 2 ? 'text-yellow-400' : 'text-white/35'}`}>
+                  <span className={`readout text-xs font-semibold ${isOverdue(a) ? 'text-red-400' : d <= 2 ? 'text-yellow-400' : 'text-white/35'}`}>
                     {isOverdue(a) ? `⚠️ ${Math.abs(d)}d overdue` : d === 0 ? '⚡ Due today' : d === 1 ? '⏰ Due tomorrow' : `Due ${a.dueDate}`}
                   </span>
                 )
@@ -161,16 +163,17 @@ export default function School() {
     )
   }
 
-  const selectClass = 'bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:border-[#3B82F6] transition-colors'
+  const selectClass = 'readout bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-white text-xs focus:border-[#3B82F6] transition-colors'
 
   return (
     <div className="page-enter min-h-screen p-4 pt-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-black tracking-[-0.03em]" style={{ color: COLOR }}>School</h1>
+          <div className="readout text-[10px] font-bold uppercase tracking-[0.3em] text-white/35">// Assignments</div>
+          <h1 className="text-3xl font-black tracking-[-0.03em] text-glow" style={{ color: COLOR }}>School</h1>
           <p className="text-white/40 text-sm mt-1">
-            {docs.filter(a => !a.done).length} pending{overdueCount > 0 ? ' · ' : ''}
-            {overdueCount > 0 && <span className="text-red-400">{overdueCount} overdue</span>}
+            <span className="readout">{docs.filter(a => !a.done).length}</span> pending{overdueCount > 0 ? ' · ' : ''}
+            {overdueCount > 0 && <span className="text-red-400"><span className="readout">{overdueCount}</span> overdue</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -210,21 +213,34 @@ export default function School() {
       )}
 
       <div className="space-y-3">
-        {filterStatus !== 'done' && ['Overdue', 'Today', 'This week', 'Later'].map(group => (
-          groups[group].length > 0 && (
+        {filterStatus !== 'done' && ['Overdue', 'Today', 'This week', 'Later'].map(group => {
+          const gc = GROUP_COLOR[group]
+          return groups[group].length > 0 && (
             <div key={group} className="space-y-3">
-              <div className="text-xs font-bold uppercase tracking-widest pt-1"
-                style={{ color: group === 'Overdue' ? '#EF4444' : 'rgba(255,255,255,0.3)' }}>
-                {group} ({groups[group].length})
+              <div className="hairline-b flex items-center gap-2 pb-2 pt-1">
+                <span className="readout text-[11px] font-bold uppercase tracking-[0.2em]"
+                  style={{ color: gc, textShadow: group === 'Overdue' ? `0 0 12px ${gc}66` : 'none' }}>
+                  {group}
+                </span>
+                <span className="readout text-[10px] font-black px-1.5 py-0.5 rounded-md leading-none"
+                  style={{ color: gc, background: `${gc}1a`, border: `1px solid ${gc}40` }}>
+                  {groups[group].length}
+                </span>
               </div>
               {groups[group].map(AssignmentCard)}
             </div>
           )
-        ))}
+        })}
 
         {(filterStatus === 'all' || filterStatus === 'done') && done.length > 0 && (
           <>
-            <div className="text-xs font-bold text-white/25 uppercase tracking-widest pt-3">Completed ({done.length})</div>
+            <div className="hairline-b flex items-center gap-2 pb-2 pt-3">
+              <span className="readout text-[11px] font-bold text-white/30 uppercase tracking-[0.2em]">Completed</span>
+              <span className="readout text-[10px] font-black px-1.5 py-0.5 rounded-md leading-none text-[#10B981]"
+                style={{ background: '#10B9811a', border: '1px solid #10B98140' }}>
+                {done.length}
+              </span>
+            </div>
             {done.map(a => (
               <Card key={a.id} className="p-3 opacity-60">
                 <div className="flex items-center gap-3">

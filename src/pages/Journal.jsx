@@ -95,8 +95,9 @@ export default function Journal() {
     <div className="page-enter min-h-screen p-4 pt-10">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black tracking-[-0.03em]" style={{ color: COLOR }}>Journal</h1>
-          <p className="text-white/40 text-sm mt-1">{docs.length} entries</p>
+          <div className="readout text-[10px] font-bold uppercase tracking-[0.3em] text-white/35">// Mind log</div>
+          <h1 className="text-3xl font-black tracking-[-0.03em] text-glow" style={{ color: COLOR }}>Journal</h1>
+          <p className="text-white/40 text-sm mt-1"><span className="readout">{docs.length}</span> entries</p>
         </div>
         <button onClick={() => setShowModal(true)}
           className="btn-press px-4 h-10 rounded-full flex items-center justify-center font-bold text-sm"
@@ -111,23 +112,23 @@ export default function Journal() {
         <div className="grid grid-cols-2 gap-3 mb-5">
           <Card accentColor={COLOR} className="p-4 flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
-              style={{ background: `${COLOR}18` }}>
+              style={{ background: `${COLOR}18`, border: `1px solid ${COLOR}33`, boxShadow: `0 0 16px ${COLOR}22` }}>
               {moodEmoji(Math.round(parseFloat(avgMood)))}
             </div>
             <div>
-              <div className="text-xs text-white/40 uppercase tracking-widest">Avg Mood</div>
-              <div className="text-2xl font-black text-white mt-0.5">{avgMood}<span className="text-white/30 text-base"> / 5</span></div>
+              <div className="readout text-[10px] text-white/40 uppercase tracking-[0.22em]">Avg Mood</div>
+              <div className="readout text-2xl font-black text-white mt-0.5 text-glow">{avgMood}<span className="text-white/30 text-base"> / 5</span></div>
               <div className="text-xs font-semibold mt-0.5" style={{ color: COLOR }}>{moodLabel(Math.round(parseFloat(avgMood)))}</div>
             </div>
           </Card>
           <Card accentColor={COLOR} className="p-4 flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0"
-              style={{ background: `${COLOR}18` }}>
+              style={{ background: `${COLOR}18`, border: `1px solid ${COLOR}33`, boxShadow: `0 0 16px ${COLOR}22` }}>
               🔥
             </div>
             <div>
-              <div className="text-xs text-white/40 uppercase tracking-widest">Streak</div>
-              <div className="text-2xl font-black text-white mt-0.5">{streak}<span className="text-white/30 text-base"> {streak === 1 ? 'day' : 'days'}</span></div>
+              <div className="readout text-[10px] text-white/40 uppercase tracking-[0.22em]">Streak</div>
+              <div className="readout text-2xl font-black mt-0.5" style={{ color: streak > 0 ? '#F97316' : '#fff', textShadow: streak > 0 ? '0 0 14px rgba(249,115,22,0.5)' : 'none' }}>{streak}<span className="text-white/30 text-base"> {streak === 1 ? 'day' : 'days'}</span></div>
               <div className="text-xs font-semibold mt-0.5" style={{ color: COLOR }}>{streak > 0 ? 'Keep it going' : 'Write today'}</div>
             </div>
           </Card>
@@ -136,26 +137,31 @@ export default function Journal() {
 
       {trend.length >= 2 && (
         <Card accentColor={COLOR} className="p-4 mb-5">
-          <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Mood Trend</div>
+          <div className="readout text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Mood Trend · 1–5</div>
           <LineChart data={trend} color={COLOR} height={120} target={3} />
         </Card>
       )}
 
       {docs.length > 0 && (
         <div className="mb-4 space-y-3">
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search entries, tags, dates..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/25 text-sm focus:border-[#EAB308] transition-colors" />
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 text-sm pointer-events-none">⌕</span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search entries, tags, dates..."
+              className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-white placeholder-white/25 text-sm focus:border-[#EAB308] transition-colors" />
+          </div>
           {allTags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {allTags.map(t => {
                 const active = tagFilter === t
                 return (
                   <button key={t} onClick={() => setTagFilter(active ? null : t)}
-                    className="btn-press text-[11px] font-bold px-2.5 py-1 rounded-full transition-all"
+                    className="btn-press readout text-[11px] font-bold px-2.5 py-1 rounded-full transition-all"
                     style={{
                       background: active ? COLOR : `${COLOR}18`,
                       color: active ? '#000' : COLOR,
+                      border: `1px solid ${active ? COLOR : COLOR + '30'}`,
+                      boxShadow: active ? `0 0 14px ${COLOR}77` : 'none',
                     }}>
                     #{t}
                   </button>
@@ -179,7 +185,7 @@ export default function Journal() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold" style={{ color: COLOR }}>{moodLabel(entry.mood)}</span>
-                  <span className="text-xs text-white/30">{entry.date}</span>
+                  <span className="readout text-xs text-white/30">{entry.date}</span>
                 </div>
                 <p className={`text-sm text-white/70 leading-relaxed ${expanded === entry.id ? '' : 'line-clamp-2'}`}>
                   {entry.text}
@@ -188,8 +194,8 @@ export default function Journal() {
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {entry.tags.map(t => (
                       <button key={t} onClick={e => { e.stopPropagation(); setTagFilter(t) }}
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        style={{ background: `${COLOR}18`, color: COLOR }}>
+                        className="readout text-[10px] font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: `${COLOR}18`, color: COLOR, border: `1px solid ${COLOR}30` }}>
                         #{t}
                       </button>
                     ))}
