@@ -1,13 +1,13 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 const RING_META = [
   { key: 'cal', label: 'Calories', color: '#7C3AED', unit: '' },
-  { key: 'p', label: 'Protein', color: '#06B6D4', unit: 'g' },
+  { key: 'p', label: 'Protein', color: '#22D3EE', unit: 'g' },
   { key: 'c', label: 'Carbs', color: '#F97316', unit: 'g' },
   { key: 'f', label: 'Fat', color: '#EAB308', unit: 'g' },
 ]
 
-function Ring({ label, color, current, target, unit }) {
+function Ring({ label, color, current, target, unit, index = 0 }) {
   const size = 76
   const stroke = 8
   const r = (size - stroke) / 2
@@ -17,18 +17,38 @@ function Ring({ label, color, current, target, unit }) {
   const offset = circ * (1 - pct)
   const over = current > target && target > 0
 
+  // Mount grow animation: start empty, then animate to value.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
+  const fid = `mr-glow-${color.replace('#', '')}`
+
   return (
     <div className="flex flex-col items-center">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
+          <defs>
+            <filter id={fid} x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {/* track */}
           <circle
             cx={size / 2}
             cy={size / 2}
             r={r}
             fill="none"
-            stroke="rgba(255,255,255,0.08)"
+            stroke="rgba(255,255,255,0.07)"
             strokeWidth={stroke}
           />
+          {/* luminous progress arc */}
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -38,18 +58,25 @@ function Ring({ label, color, current, target, unit }) {
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={circ}
-            strokeDashoffset={offset}
+            strokeDashoffset={mounted ? offset : circ}
+            filter={`url(#${fid})`}
             style={{
-              transition: 'stroke-dashoffset 0.6s ease',
-              filter: `drop-shadow(0 0 5px ${color}80)`,
+              transition: 'stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1)',
+              transitionDelay: `${index * 90}ms`,
             }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-sm font-black leading-none" style={{ color: over ? '#EF4444' : '#ffffff' }}>
+          <span
+            className="readout text-sm font-bold leading-none"
+            style={{
+              color: over ? '#F87171' : '#ffffff',
+              textShadow: over ? '0 0 10px rgba(248,113,113,0.5)' : `0 0 10px ${color}66`,
+            }}
+          >
             {Math.round(current)}
           </span>
-          <span className="text-[9px] text-white/35 leading-none mt-0.5">
+          <span className="readout text-[9px] text-white/35 leading-none mt-0.5">
             /{Math.round(target)}{unit}
           </span>
         </div>
@@ -75,9 +102,10 @@ export default function MacroRings({ totals = {}, targets = {} }) {
 
   return (
     <div className="grid grid-cols-4 gap-2">
-      {RING_META.map((m) => (
+      {RING_META.map((m, i) => (
         <Ring
           key={m.key}
+          index={i}
           label={m.label}
           color={m.color}
           unit={m.unit}
