@@ -265,3 +265,11 @@
 .recharts-surface:focus {
   outline: none;
 }
+
+/* Fluid sparkline: the inline <svg> stretches to fill its container box
+   (Sparkline uses preserveAspectRatio="none", so it scales cleanly). */
+.spark-fill svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

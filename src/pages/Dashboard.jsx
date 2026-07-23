@@ -9,6 +9,7 @@ import { todayDayKey } from '../lib/training'
 import { computeAchievements } from '../lib/achievements'
 import { formatWeight, toKg, fromKg } from '../lib/units'
 import GlobalSearch from '../components/GlobalSearch'
+import { Donut, Sparkline } from '../components/charts/Charts'
 
 const FITNESS = '#7C3AED'
 const CYAN = '#06B6D4'
@@ -119,13 +120,24 @@ function CollapsibleSection({ storageKey, defaultOpen = false, accentColor, icon
         onClick={() => setOpen((o) => !o)}
         className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
       >
-        <span className="text-lg flex-shrink-0">{icon}</span>
-        <span className="flex-1 font-bold text-white text-[15px] truncate">{title}</span>
+        <span
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+          style={{
+            background: `${accentColor}18`,
+            border: `1px solid ${accentColor}33`,
+            boxShadow: open ? `0 0 14px ${accentColor}44` : 'none',
+          }}
+        >
+          {icon}
+        </span>
+        <span className="flex-1 font-bold text-white text-[15px] tracking-tight truncate">{title}</span>
         {summary != null && summary !== '' && (
-          <span className="text-xs font-semibold text-white/40 flex-shrink-0">{summary}</span>
+          <span className="readout text-[11px] font-semibold text-white/45 flex-shrink-0 uppercase tracking-wide">
+            {summary}
+          </span>
         )}
         <span
-          className="text-white/40 text-xs flex-shrink-0 transition-transform duration-300"
+          className="text-white/35 text-xs flex-shrink-0 transition-transform duration-300"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
         >
           ▾
@@ -135,7 +147,8 @@ function CollapsibleSection({ storageKey, defaultOpen = false, accentColor, icon
         className={`grid transition-all duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
       >
         <div className="overflow-hidden">
-          <div className="px-4 pb-4 pt-0.5">{children}</div>
+          <div className="hairline" />
+          <div className="px-4 pb-4 pt-3.5">{children}</div>
         </div>
       </div>
     </Card>
@@ -250,6 +263,39 @@ export default function Dashboard() {
   const todayKey = todayDayKey()
   const todaySplit = SPLIT[todayKey] || 'Rest'
   const isRest = todaySplit === 'Rest'
+
+  // ---- Display-only HUD readouts (fed by already-fetched data; no new reads) ----
+  const CAL_TARGET_DEFAULT = 2200
+  const todayFood = useMemo(
+    () => (foodLog || []).find((d) => d.date === today) || null,
+    [foodLog, today]
+  )
+  const caloriesToday = useMemo(
+    () => (todayFood?.items || []).reduce((a, it) => a + (Number(it.cal) || 0), 0),
+    [todayFood]
+  )
+  const calorieTarget = Number((fitProfiles || [])[0]?.calories) || CAL_TARGET_DEFAULT
+  const calRemaining = Math.round(calorieTarget - caloriesToday)
+  const calPct = calorieTarget > 0 ? Math.min(100, Math.round((caloriesToday / calorieTarget) * 100)) : 0
+  const calOver = caloriesToday > calorieTarget && calorieTarget > 0
+  // Recent weigh-ins → sparkline (display units; only the shape matters).
+  const weightSpark = useMemo(
+    () => sortedWeights.slice(-12).map((w) => Number(fromKg(w.value, units)) || 0),
+    [sortedWeights, units]
+  )
+  // Habit completions per day across the last 7 days → sparkline.
+  const habitSpark = useMemo(() => {
+    const base = new Date()
+    base.setHours(0, 0, 0, 0)
+    const out = []
+    for (let i = 6; i >= 0; i--) {
+      const dd = new Date(base)
+      dd.setDate(dd.getDate() - i)
+      const key = localKey(dd)
+      out.push((habits || []).filter((h) => (h.completions || []).includes(key)).length)
+    }
+    return out
+  }, [habits])
 
   // ---- Daily goals (tomorrow → today) ----
   const todayGoalDoc = useMemo(
@@ -366,75 +412,204 @@ export default function Dashboard() {
 
   return (
     <div className="page-enter min-h-screen p-4 pt-10 space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-white/40 text-sm font-medium">{formatDate()}</p>
-          <h1 className="text-3xl font-black tracking-[-0.03em] text-white mt-1">
-            {getGreeting()},<br />{name} 👋
-          </h1>
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <button
-            onClick={() => setSearchOpen(true)}
-            className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
-            aria-label="Search"
-          >
-            🔍
-          </button>
-          <button
-            onClick={() => navigate('/settings')}
-            className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
-            aria-label="Settings"
-          >
-            ⚙️
-          </button>
-          <button
-            onClick={logout}
-            className="btn-press text-white/30 hover:text-white/60 transition-colors text-sm font-medium"
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="text-center py-4" accentColor="#06B6D4" hover>
-          <div className="text-2xl font-black text-white">{habitsToday.length}/{habits.length}</div>
-          <div className="text-xs text-white/40 font-semibold mt-0.5 uppercase tracking-wider">Habits</div>
-        </Card>
-        <Card className="text-center py-4" accentColor="#7C3AED" hover>
-          <div className="text-2xl font-black text-white">{activeGoals.length}</div>
-          <div className="text-xs text-white/40 font-semibold mt-0.5 uppercase tracking-wider">Goals</div>
-        </Card>
-        <Card className="text-center py-4" accentColor="#F97316" hover>
-          <div className="text-2xl font-black text-white">{streak > 0 ? `${streak}🔥` : '0'}</div>
-          <div className="text-xs text-white/40 font-semibold mt-0.5 uppercase tracking-wider">Streak</div>
-        </Card>
-      </div>
-
-      {/* ---- Weight: log bodyweight straight from home ---- */}
-      <Card accentColor="#10B981" className="p-4">
+      {/* ===== Command-centre header ===== */}
+      <div className="hud-panel grid-bg relative overflow-hidden p-4">
+        {/* top control bar */}
         <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-2 h-2 rounded-full animate-hud-pulse flex-shrink-0"
+              style={{ background: CYAN, boxShadow: `0 0 10px ${CYAN}` }}
+            />
+            <span className="readout text-[10px] font-semibold uppercase tracking-[0.28em] text-white/45 truncate">
+              LifeOS · Command
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
+              aria-label="Search"
+            >
+              🔍
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/40 hover:text-white/70 bg-white/5 border border-white/10 transition-colors"
+              aria-label="Settings"
+            >
+              ⚙️
+            </button>
+            <button
+              onClick={logout}
+              className="btn-press text-white/30 hover:text-white/60 transition-colors text-xs font-medium"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* greeting + live clock */}
+        <div className="mt-4 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs font-bold text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+            <p className="readout text-white/40 text-[11px] font-medium uppercase tracking-widest">{formatDate()}</p>
+            <h1 className="text-[26px] leading-[1.06] font-black tracking-[-0.03em] text-white mt-1">
+              {getGreeting()},<br />{name} 👋
+            </h1>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="readout text-2xl font-black text-white text-glow">
+              {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="text-white/30 text-[10px] font-semibold mt-0.5 uppercase tracking-widest">
+              {time.toLocaleDateString('en-US', { weekday: 'long' })}
+            </div>
+          </div>
+        </div>
+
+        {/* training / rest instrument readout */}
+        <div className="hairline-t mt-4 pt-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              className="text-xl flex-shrink-0"
+              style={{ filter: `drop-shadow(0 0 6px ${isRest ? 'rgba(255,255,255,0.25)' : FITNESS})` }}
+            >
+              {SPLIT_ICON[todaySplit] || '💪'}
+            </span>
+            <div className="min-w-0">
+              <div className="readout text-[9px] font-semibold uppercase tracking-[0.28em] text-white/40">Status</div>
+              <div
+                className="font-black text-[15px] tracking-tight"
+                style={{
+                  color: isRest ? 'rgba(255,255,255,0.85)' : FITNESS,
+                  textShadow: isRest ? 'none' : `0 0 14px ${FITNESS}66`,
+                }}
+              >
+                {isRest ? 'REST DAY' : 'TRAINING DAY'}
+                {!isRest && <span className="text-white/40 font-bold"> · {todaySplit}</span>}
+              </div>
+            </div>
+          </div>
+          <span
+            className="readout text-[10px] font-bold uppercase tracking-widest flex-shrink-0"
+            style={{ color: isRest ? 'rgba(255,255,255,0.35)' : CYAN }}
+          >
+            {isRest ? 'Recover' : 'Online'}
+          </span>
+        </div>
+      </div>
+
+      {/* ===== Primary actions ===== */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Log weight', icon: '⚖️', color: '#10B981', onClick: openWeightModal },
+          { label: 'Log food', icon: '🍽️', color: FITNESS, onClick: () => navigate('/fitness', { state: { tab: 'food' } }) },
+          { label: 'Start workout', icon: '💪', color: CYAN, onClick: () => navigate('/fitness', { state: { tab: 'train' } }) },
+        ].map((a) => (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            className="btn-press hud-panel relative overflow-hidden flex flex-col items-center justify-center gap-1.5 py-4 px-2"
+            style={{ borderColor: `${a.color}55`, boxShadow: `0 0 20px ${a.color}22, inset 0 1px 0 rgba(255,255,255,0.06)` }}
+          >
+            <span className="text-2xl" style={{ filter: `drop-shadow(0 0 8px ${a.color})` }}>{a.icon}</span>
+            <span className="text-[11px] font-bold text-white text-center leading-tight tracking-tight">{a.label}</span>
+            <span
+              className="absolute inset-x-0 bottom-0 h-[2px]"
+              style={{ background: `linear-gradient(90deg, transparent, ${a.color}, transparent)`, boxShadow: `0 0 10px ${a.color}` }}
+            />
+          </button>
+        ))}
+      </div>
+
+      {/* ===== Vitals ===== */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Habits + 7-day trend */}
+        <div className="hud-panel p-3 flex flex-col">
+          <div className="readout text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">Habits</div>
+          <div className="readout text-2xl font-black text-white mt-1 leading-none">
+            {habitsToday.length}<span className="text-white/30 text-base font-bold">/{habits.length}</span>
+          </div>
+          <div className="spark-fill w-full h-7 mt-auto pt-2">
+            <Sparkline data={habitSpark} color={CYAN} width={100} height={26} />
+          </div>
+        </div>
+        {/* Active goals */}
+        <div className="hud-panel p-3 flex flex-col">
+          <div className="readout text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">Goals</div>
+          <div className="readout text-2xl font-black text-white mt-1 leading-none">{activeGoals.length}</div>
+          <div className="readout text-[10px] text-white/35 mt-auto pt-2 uppercase tracking-wider">Active</div>
+        </div>
+        {/* Streak */}
+        <div className="hud-panel p-3 flex flex-col">
+          <div className="readout text-[9px] font-semibold uppercase tracking-[0.2em] text-white/40">Streak</div>
+          <div
+            className="readout text-2xl font-black mt-1 leading-none"
+            style={{ color: streak > 0 ? '#F97316' : '#fff', textShadow: streak > 0 ? '0 0 14px rgba(249,115,22,0.5)' : 'none' }}
+          >
+            {streak}<span className="text-base">{streak > 0 ? '🔥' : ''}</span>
+          </div>
+          <div className="readout text-[10px] text-white/35 mt-auto pt-2 uppercase tracking-wider">Days</div>
+        </div>
+      </div>
+
+      {/* ===== Fuel · calories today vs target ===== */}
+      <div className="hud-panel p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex-shrink-0">
+            <Donut value={caloriesToday} max={calorieTarget} label="of target" color={FITNESS} size={96} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="readout text-[10px] font-semibold uppercase tracking-[0.25em] text-white/40 flex items-center gap-1.5">
+              <span>🍽️</span> Fuel · Today
+            </div>
+            <div className="readout text-3xl font-black text-white mt-1 leading-none">
+              {Math.round(caloriesToday)}<span className="text-white/30 text-lg font-bold"> kcal</span>
+            </div>
+            <div className="readout text-xs text-white/45 mt-1.5">
+              target {calorieTarget} · {calRemaining >= 0 ? `${calRemaining} left` : `${Math.abs(calRemaining)} over`}
+            </div>
+            <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${calPct}%`, background: calOver ? '#F87171' : FITNESS, boxShadow: `0 0 10px ${calOver ? '#F87171' : FITNESS}88` }}
+              />
+            </div>
+            <button
+              onClick={() => navigate('/fitness', { state: { tab: 'food' } })}
+              className="btn-press mt-3 text-[11px] font-bold"
+              style={{ color: FITNESS }}
+            >
+              Open food log →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Weight ===== */}
+      <div className="hud-panel p-4" style={{ borderColor: 'rgba(16,185,129,0.28)' }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="readout text-[10px] font-semibold text-white/40 uppercase tracking-[0.25em] flex items-center gap-1.5">
               <span>⚖️</span> Weight
             </div>
             {latestWeight ? (
               <>
-                <div className="text-3xl font-black text-white mt-1 leading-none">
+                <div
+                  className="readout text-3xl font-black text-white mt-1.5 leading-none"
+                  style={{ textShadow: '0 0 16px rgba(16,185,129,0.35)' }}
+                >
                   {formatWeight(latestWeight.value, units)}
                 </div>
-                <div className="text-xs text-white/40 mt-1">
-                  {latestWeight.date === today ? "Today's weight" : `Last logged ${latestWeight.date}`}
+                <div className="readout text-[11px] text-white/40 mt-1.5">
+                  {latestWeight.date === today ? 'Today' : `Last ${latestWeight.date}`}
                   {goalWeightKg != null && (
                     <> · goal {formatWeight(goalWeightKg, units)}</>
                   )}
                 </div>
               </>
             ) : (
-              <div className="text-sm text-white/50 mt-1">No weigh-ins yet — add your first below.</div>
+              <div className="text-sm text-white/50 mt-1.5">No weigh-ins yet — add your first.</div>
             )}
           </div>
           <button
@@ -445,69 +620,50 @@ export default function Dashboard() {
             ＋ Log weight
           </button>
         </div>
-      </Card>
-
-      {/* Time display */}
-      <Card className="py-5 text-center" accentColor="#7C3AED">
-        <div className="text-4xl font-black tracking-tight text-white">
-          {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        {/* recent weigh-in trend */}
+        <div className="hairline-t mt-3 pt-3 flex items-center gap-3">
+          <span className="readout text-[9px] font-semibold uppercase tracking-[0.2em] text-white/35 flex-shrink-0">Trend</span>
+          <div className="spark-fill flex-1 h-8">
+            <Sparkline data={weightSpark} color="#10B981" width={200} height={30} />
+          </div>
         </div>
-        <div className="text-white/30 text-xs font-semibold mt-1 uppercase tracking-widest">
-          {time.toLocaleDateString('en-US', { weekday: 'long' })}
-        </div>
-      </Card>
+      </div>
 
-      {/* ---- Weekly Review entry ---- */}
-      <Card accentColor="#7C3AED" className="p-0 overflow-hidden" hover>
-        <button
-          onClick={() => navigate('/review')}
-          className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
-        >
-          <span className="text-lg flex-shrink-0">📊</span>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-white text-[15px]">Weekly Review</div>
-            <div className="text-[11px] text-white/40">Your last 7 days across fitness, habits & mood</div>
-          </div>
-          <span className="text-white/40 text-sm flex-shrink-0">→</span>
-        </button>
-      </Card>
+      {/* ===== Console · navigation ===== */}
+      <div className="hud-panel overflow-hidden p-0">
+        {[
+          { to: '/review', icon: '📊', title: 'Weekly Review', sub: 'Last 7 days across fitness, habits & mood' },
+          { to: '/wellness', icon: '🌙', title: 'Wellness', sub: 'Sleep, activity, supplements & fasting' },
+          { to: '/calendar', icon: '🗓️', title: 'Calendar', sub: 'Workouts, assignments, journal & weigh-ins by day' },
+        ].map((n, i) => (
+          <React.Fragment key={n.to}>
+            {i > 0 && <div className="hairline" />}
+            <button
+              onClick={() => navigate(n.to)}
+              className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
+            >
+              <span
+                className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-lg"
+                style={{ background: `${FITNESS}14`, border: `1px solid ${FITNESS}2e` }}
+              >
+                {n.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-white text-[15px] tracking-tight">{n.title}</div>
+                <div className="text-[11px] text-white/40 truncate">{n.sub}</div>
+              </div>
+              <span className="text-white/30 text-sm flex-shrink-0">→</span>
+            </button>
+          </React.Fragment>
+        ))}
+      </div>
 
-      {/* ---- Wellness entry ---- */}
-      <Card accentColor="#7C3AED" className="p-0 overflow-hidden" hover>
-        <button
-          onClick={() => navigate('/wellness')}
-          className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
-        >
-          <span className="text-lg flex-shrink-0">🌙</span>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-white text-[15px]">Wellness</div>
-            <div className="text-[11px] text-white/40">Sleep, activity, supplements & fasting</div>
-          </div>
-          <span className="text-white/40 text-sm flex-shrink-0">→</span>
-        </button>
-      </Card>
-
-      {/* ---- Calendar entry ---- */}
-      <Card accentColor="#7C3AED" className="p-0 overflow-hidden" hover>
-        <button
-          onClick={() => navigate('/calendar')}
-          className="btn-press w-full flex items-center gap-3 px-4 py-3.5 text-left"
-        >
-          <span className="text-lg flex-shrink-0">🗓️</span>
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-white text-[15px]">Calendar</div>
-            <div className="text-[11px] text-white/40">Workouts, assignments, journal & weigh-ins by day</div>
-          </div>
-          <span className="text-white/40 text-sm flex-shrink-0">→</span>
-        </button>
-      </Card>
-
-      {/* ---- Today strip: training / rest + week strip ---- */}
-      <Card accentColor={FITNESS} className="p-4">
+      {/* ===== Today · training instrument ===== */}
+      <div className="hud-panel p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-xs font-bold text-white/40 uppercase tracking-widest">Today</div>
-            <div className="text-lg font-black text-white mt-0.5">
+            <div className="readout text-[9px] font-semibold text-white/40 uppercase tracking-[0.25em]">Program · This week</div>
+            <div className="text-lg font-black text-white mt-0.5 tracking-tight">
               {isRest ? 'Rest day' : 'Training day'} <span className="text-lg">{SPLIT_ICON[todaySplit] || '💪'}</span>
             </div>
           </div>
@@ -534,7 +690,7 @@ export default function Dashboard() {
                     boxShadow: isToday ? `0 0 12px ${FITNESS}70` : 'none',
                   }}
                 >
-                  <div className="text-[9px] font-black" style={{ color: isToday ? '#fff' : rest ? 'rgba(255,255,255,0.3)' : FITNESS }}>
+                  <div className="readout text-[9px] font-black" style={{ color: isToday ? '#fff' : rest ? 'rgba(255,255,255,0.3)' : FITNESS }}>
                     {dk}
                   </div>
                 </div>
@@ -543,7 +699,14 @@ export default function Dashboard() {
             )
           })}
         </div>
-      </Card>
+      </div>
+
+      {/* ===== Modules ===== */}
+      <div className="flex items-center gap-3 pt-1">
+        <div className="hairline flex-1" />
+        <span className="readout text-[9px] font-semibold uppercase tracking-[0.3em] text-white/30">Modules</span>
+        <div className="hairline flex-1" />
+      </div>
 
       {/* ---- Today's 3 Goals ---- */}
       <CollapsibleSection
