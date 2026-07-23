@@ -97,8 +97,9 @@ export default function Calendar() {
     <div className="page-enter min-h-screen p-4 pt-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-black tracking-[-0.03em]" style={{ color: COLOR }}>Calendar</h1>
-          <p className="text-white/40 text-sm mt-1">{monthEventCount} events this month</p>
+          <div className="readout text-[10px] font-bold uppercase tracking-[0.3em] text-white/35">// Timeline</div>
+          <h1 className="text-3xl font-black tracking-[-0.03em] text-glow" style={{ color: COLOR }}>Calendar</h1>
+          <p className="text-white/40 text-sm mt-1"><span className="readout">{monthEventCount}</span> events this month</p>
         </div>
         <button
           onClick={() => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(todayKey) }}
@@ -113,8 +114,8 @@ export default function Calendar() {
           <button onClick={() => setCursor(c => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
             className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/60 bg-white/5 border border-white/10">‹</button>
           <div className="text-center">
-            <div className="font-black text-white text-lg">{MONTHS[cursor.getMonth()]}</div>
-            <div className="text-xs text-white/30">{cursor.getFullYear()}</div>
+            <div className="font-black text-white text-lg tracking-tight">{MONTHS[cursor.getMonth()]}</div>
+            <div className="readout text-xs text-white/30">{cursor.getFullYear()}</div>
           </div>
           <button onClick={() => setCursor(c => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
             className="btn-press w-9 h-9 rounded-full flex items-center justify-center text-white/60 bg-white/5 border border-white/10">›</button>
@@ -122,7 +123,7 @@ export default function Calendar() {
 
         <div className="grid grid-cols-7 gap-1 mb-2">
           {WEEKDAYS.map((d, i) => (
-            <div key={i} className="text-center text-[10px] font-bold text-white/30 uppercase">{d}</div>
+            <div key={i} className="readout text-center text-[10px] font-bold text-white/30 uppercase tracking-wider">{d}</div>
           ))}
         </div>
 
@@ -136,13 +137,19 @@ export default function Calendar() {
               <button key={i} onClick={() => setSelected(c.key)}
                 className="btn-press aspect-square rounded-xl flex flex-col items-center justify-start pt-1.5 gap-1 transition-all"
                 style={{
-                  background: isToday ? `${COLOR}25` : isSel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)',
-                  border: isToday ? `1.5px solid ${COLOR}` : isSel ? '1px solid rgba(255,255,255,0.25)' : '1px solid transparent',
+                  background: isToday ? `${COLOR}22` : isSel ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)',
+                  border: isToday ? `1.5px solid ${COLOR}` : isSel ? '1px solid rgba(255,255,255,0.25)' : '1px solid var(--line)',
+                  boxShadow: isToday ? `0 0 14px ${COLOR}55, inset 0 0 12px ${COLOR}22` : 'none',
                 }}>
-                <span className={`text-xs font-bold ${isToday ? 'text-white' : 'text-white/60'}`}>{c.day}</span>
+                <span
+                  className={`readout text-xs font-bold ${isToday ? 'text-white' : 'text-white/60'}`}
+                  style={{ textShadow: isToday ? `0 0 10px ${COLOR}` : 'none' }}
+                >
+                  {c.day}
+                </span>
                 <div className="flex flex-wrap gap-0.5 justify-center px-0.5">
                   {ds.map((color, j) => (
-                    <span key={j} className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+                    <span key={j} className="w-1.5 h-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 5px ${color}` }} />
                   ))}
                 </div>
               </button>
@@ -152,12 +159,16 @@ export default function Calendar() {
       </Card>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-white/40 mb-2 px-1">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: WORKOUT }} />Workout</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: JOURNAL }} />Journal</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: WEIGH }} />Weigh-in</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: MEASURE }} />Measurement</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: OVERDUE }} />Overdue</span>
+      <div className="hud-panel p-3 mb-2">
+        <div className="readout text-[9px] font-bold uppercase tracking-[0.25em] text-white/35 mb-2">Legend</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-white/50">
+          {[[WORKOUT, 'Workout'], [JOURNAL, 'Journal'], [WEIGH, 'Weigh-in'], [MEASURE, 'Measurement'], [OVERDUE, 'Overdue']].map(([color, label]) => (
+            <span key={label} className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
 
       <Modal isOpen={!!selected} onClose={() => setSelected(null)}
@@ -168,7 +179,7 @@ export default function Calendar() {
 
           {sel && sel.workouts.map((w, i) => (
             <div key={`w${i}`} className="p-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: WORKOUT }} />
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: WORKOUT, boxShadow: `0 0 6px ${WORKOUT}` }} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-white">Workout{w.day ? ` · ${w.day}` : ''}</div>
                 <div className="text-[11px] text-white/35">Training session</div>
@@ -181,7 +192,7 @@ export default function Calendar() {
             return (
               <button key={`a${i}`} onClick={() => navigate('/school')}
                 className="btn-press w-full text-left p-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: overdue ? OVERDUE : (a.color || '#3B82F6') }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: overdue ? OVERDUE : (a.color || '#3B82F6'), boxShadow: `0 0 6px ${overdue ? OVERDUE : (a.color || '#3B82F6')}` }} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-bold ${a.done ? 'text-white/40 line-through' : 'text-white'}`}>{a.title}</div>
                   <div className="text-[11px]" style={{ color: overdue ? OVERDUE : 'rgba(255,255,255,0.35)' }}>
@@ -207,7 +218,7 @@ export default function Calendar() {
 
           {sel && sel.weights.map((w, i) => (
             <div key={`wt${i}`} className="p-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: WEIGH }} />
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: WEIGH, boxShadow: `0 0 6px ${WEIGH}` }} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-white">Weigh-in{Number.isFinite(Number(w.weight)) ? ` · ${Number(w.weight)}` : ''}</div>
                 <div className="text-[11px] text-white/35">Body weight logged</div>
@@ -217,7 +228,7 @@ export default function Calendar() {
 
           {sel && sel.measurements.map((m, i) => (
             <div key={`m${i}`} className="p-3 rounded-xl bg-white/[0.04] border border-white/10 flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: MEASURE }} />
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: MEASURE, boxShadow: `0 0 6px ${MEASURE}` }} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-white">Measurement</div>
                 <div className="text-[11px] text-white/35">Body measurement logged</div>

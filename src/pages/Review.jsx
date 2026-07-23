@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useFirestore } from '../hooks/useFirestore'
 import Card from '../components/Card'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { LineChart, BarChart } from '../components/charts/Charts'
+import { LineChart, BarChart, Donut, Sparkline } from '../components/charts/Charts'
 import { estimateVolume } from '../lib/training'
 
 const COLOR = '#7C3AED'
+const CYAN = '#22D3EE'
 const DEFAULT_TARGETS = { calories: 2200, protein: 150, carbs: 220, fat: 70 }
 const MOOD_EMOJI = { 1: '😞', 2: '😐', 3: '🙂', 4: '😊', 5: '🤩' }
 
@@ -30,15 +31,18 @@ const sumItems = (items, field) =>
   (items || []).reduce((a, it) => a + (Number(it[field]) || 0), 0)
 
 function SectionTitle({ children }) {
-  return <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">{children}</div>
+  return <div className="readout text-[11px] font-bold text-white/40 uppercase tracking-widest mb-3">{children}</div>
 }
 
-function Stat({ label, value, sub, color = '#fff' }) {
+function Stat({ label, value, sub, color = '#fff', spark, sparkColor }) {
   return (
-    <div className="text-center glass-card py-3 rounded-xl">
-      <div className="text-xl font-black" style={{ color }}>{value}</div>
-      <div className="text-[9px] text-white/35 uppercase tracking-widest mt-0.5">{label}</div>
-      {sub != null && <div className="text-[10px] text-white/40 mt-0.5">{sub}</div>}
+    <div className="text-center glass-card py-3 px-2 rounded-xl">
+      <div className="readout text-xl font-black" style={{ color, textShadow: color !== '#fff' ? `0 0 12px ${color}55` : 'none' }}>{value}</div>
+      <div className="readout text-[9px] text-white/35 uppercase tracking-widest mt-0.5">{label}</div>
+      {sub != null && <div className="readout text-[10px] text-white/40 mt-0.5">{sub}</div>}
+      {Array.isArray(spark) && spark.length >= 2 && (
+        <div className="spark-fill h-6 mt-1.5"><Sparkline data={spark} color={sparkColor || color} /></div>
+      )}
     </div>
   )
 }
@@ -160,8 +164,8 @@ export default function Review() {
           ‹
         </button>
         <div>
-          <p className="text-white/40 text-sm font-medium">Last 7 days</p>
-          <h1 className="text-2xl font-black tracking-[-0.02em] text-white">Weekly Review 📊</h1>
+          <p className="readout text-white/40 text-[10px] font-bold uppercase tracking-[0.3em]">// Last 7 days</p>
+          <h1 className="text-2xl font-black tracking-[-0.02em] text-white text-glow">Weekly Review 📊</h1>
         </div>
       </div>
 
@@ -177,13 +181,16 @@ export default function Review() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 mb-4">
-              <Stat label="Avg calories" value={nutrition.avgCal} sub={`target ${targets.calories}`} color={COLOR} />
-              <Stat label="Avg protein" value={`${nutrition.avgPro}g`} sub={`target ${targets.protein}g`} color={COLOR} />
+              <Stat label="Avg calories" value={nutrition.avgCal} sub={`target ${targets.calories}`} color={COLOR}
+                spark={nutrition.calSeries.map((s) => s.value)} sparkColor={COLOR} />
+              <Stat label="Avg protein" value={`${nutrition.avgPro}g`} sub={`target ${targets.protein}g`} color={COLOR}
+                spark={nutrition.proSeries.map((s) => s.value)} sparkColor={CYAN} />
             </div>
-            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Calories / day</div>
+            <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Calories / day · target {targets.calories}</div>
             <BarChart data={nutrition.calSeries} color={COLOR} target={targets.calories} height={130} />
-            <div className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1 mt-3">Protein / day</div>
-            <LineChart data={nutrition.proSeries} color={COLOR} target={targets.protein} height={130} yLabel="g" />
+            <div className="hairline my-3" />
+            <div className="readout text-[10px] font-bold text-white/35 uppercase tracking-widest mb-1">Protein / day · target {targets.protein}g</div>
+            <LineChart data={nutrition.proSeries} color={CYAN} target={targets.protein} height={130} yLabel="g" />
           </>
         )}
       </Card>
@@ -203,7 +210,8 @@ export default function Review() {
             {training.days.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {training.days.map((d) => (
-                  <span key={d} className="text-[11px] font-semibold text-white/70 px-2 py-1 rounded-md bg-white/5 border border-white/10">
+                  <span key={d} className="readout text-[11px] font-semibold text-white/70 px-2 py-1 rounded-md"
+                    style={{ background: `${COLOR}14`, border: `1px solid ${COLOR}3a` }}>
                     {d.slice(5).replace('-', '/')}
                   </span>
                 ))}
@@ -221,7 +229,8 @@ export default function Review() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 mb-3">
-              <Stat label="Latest" value={weight.latest != null ? `${weight.latest}kg` : '–'} color={COLOR} />
+              <Stat label="Latest" value={weight.latest != null ? `${weight.latest}kg` : '–'} color={COLOR}
+                spark={weight.series.map((s) => s.value)} sparkColor={COLOR} />
               <Stat
                 label="7-day change"
                 value={weight.change == null ? '–' : `${weight.change > 0 ? '+' : ''}${weight.change.toFixed(1)}kg`}
@@ -240,10 +249,9 @@ export default function Review() {
           {habitPct == null ? (
             <Empty text="No habits" />
           ) : (
-            <>
-              <div className="text-3xl font-black" style={{ color: COLOR }}>{habitPct}%</div>
-              <div className="text-[10px] text-white/40 uppercase tracking-widest mt-1">completion</div>
-            </>
+            <div className="flex justify-center">
+              <Donut value={habitPct} max={100} label="completion" color={COLOR} size={112} />
+            </div>
           )}
         </Card>
         <Card accentColor={COLOR} className="p-4 text-center">
@@ -252,9 +260,9 @@ export default function Review() {
             <Empty text="No entries" />
           ) : (
             <>
-              <div className="text-3xl">{mood.emoji}</div>
-              <div className="text-lg font-black text-white mt-1">{mood.avg.toFixed(1)}<span className="text-xs text-white/40">/5</span></div>
-              <div className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{mood.count} entries</div>
+              <div className="text-4xl" style={{ filter: `drop-shadow(0 0 10px ${CYAN}55)` }}>{mood.emoji}</div>
+              <div className="readout text-lg font-black text-white mt-1">{mood.avg.toFixed(1)}<span className="text-xs text-white/40">/5</span></div>
+              <div className="readout text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{mood.count} entries</div>
             </>
           )}
         </Card>
